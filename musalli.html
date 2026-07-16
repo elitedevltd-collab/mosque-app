@@ -299,6 +299,14 @@
             databaseURL: "https://mosqa-app-default-rtdb.asia-southeast1.firebasedatabase.app",
             sermonPath: "sermon"
         };
+
+        /* ============================================================
+           ⚙️ خدمة الترجمة الموثوقة (اختياري لكن يُنصح به بشدة)
+           اتركه فارغًا "" ليعمل التطبيق بخدمات الترجمة المجانية الاحتياطية فقط.
+           أو ضع رابط Cloudflare Worker بعد إعداده حسب worker/README_WORKER.md
+           ============================================================ */
+        const TRANSLATE_WORKER_URL = ""; // مثال: "https://mosque-translate.username.workers.dev"
+
         // ===== تفضيلات العرض (وضع ليلي + حجم الخط) — تُحفظ محليًا على هذا الجهاز =====
         const FIREBASE_DB_URL = `${FIREBASE_CONFIG.databaseURL}/${FIREBASE_CONFIG.sermonPath}.json`;
         let lastTimestamp = 0; 
@@ -361,11 +369,14 @@
                 .replace(/\u0670/g, 'ا') // الألف الخنجرية تُنطق ألفًا كاملة، فنحوّلها بدل حذفها (وإلا لن تُطابق كلمات مثل "العالمين")
                 .replace(/[\u064B-\u065F\u0610-\u061A\u06D6-\u06ED]/g, '') // إزالة بقية علامات التشكيل
                 .replace(/\u0640/g, '') // إزالة التطويل
+                .replace(/[،؛؟.!«»"'()\[\]{}:۔–—-]/g, ' ') // إزالة علامات الترقيم — نص الحديث في القاعدة يحتوي فواصل (،) داخل المتن بينما النطق المسموع بدونها، فكانت تمنع التطابق
                 .replace(/[إأآاٱ]/g, 'ا') // توحيد كل صور الألف (بما فيها ألف الوصل ٱ المستخدمة في نص القرآن)
                 .replace(/ى/g, 'ي')
                 .replace(/ة/g, 'ه')
                 .replace(/ؤ/g, 'و')
                 .replace(/ئ/g, 'ي')
+                .replace(/ء/g, '') // الهمزة المفردة: نص القرآن يكتب "ءامنوا" بينما التعرف الصوتي يكتب "امنوا" — حذفها يوحّد الصورتين
+                .replace(/يا\s+اي/g, 'يااي') // نداء "يا أيها": نص القرآن يكتبها موصولة "ياأيها" بينما التعرف الصوتي يفصلها — نوحّد الصورتين
                 .replace(/\s+/g, ' ')
                 .trim();
         }
@@ -395,7 +406,7 @@
             } catch (e) {
                 console.error('Local DB load failed', e);
                 if (statusEl) {
-                    statusEl.textContent = '⚠️ تعذّر تحميل قاعدة البيانات المحلية — تأكد أن مجلد data بجانب هذا الملف';
+                    statusEl.textContent = '⚠️ تعذّر تحميل قاعدة البيانات المحلية — تأكد أن ملفي quran-data.json و hadith-data.json بجانب هذا الملف';
                     statusEl.style.color = '#d32f2f';
                 }
             }
@@ -541,9 +552,12 @@
         }
 
         // عبارات دالة على أن الجملة قد تكون بداية أو جزءًا من حديث نبوي (فحص أولي سريع قبل مسح 14 ألف حديث)
+        // ملحوظة مهمة: الأنماط هنا تلتقط عبارة الإسناد فقط (بدون التهام متن الحديث نفسه) —
+        // النسخة القديمة كانت تبلع الجملة كلها حتى أول علامة ترقيم، فيفشل كشف الحديث لو قاله الإمام مسبوقًا بـ "قال رسول الله صلى الله عليه وسلم"
         const HADITH_HINT_PATTERNS = [
-            /قال\s+رسول\s+الله[^.،:؛]*/, /عن\s+أبي[^.،:؛]*/, /عن\s+ابن[^.،:؛]*/, /صلى\s+الله\s+عليه\s+وسلم/,
-            /رضي\s+الله\s+عن[^.،:؛]*/, /حدثنا[^.،:؛]*/, /أخبرنا[^.،:؛]*/, /قال\s+النبي[^.،:؛]*/
+            /قال\s+رسول\s+الله(?:\s+صلى\s+الله\s+عليه\s+وسلم)?/, /قال\s+النبي(?:\s+صلى\s+الله\s+عليه\s+وسلم)?/,
+            /صلى\s+الله\s+عليه\s+وسلم/, /رضي\s+الله\s+عن(?:هما|هم|ها|ه)?/,
+            /عن\s+أبي\s+\S+/, /عن\s+ابن\s+\S+/, /حدثنا\s+\S+/, /أخبرنا\s+\S+/
         ];
         function looksLikeHadith(text) { return HADITH_HINT_PATTERNS.some(p => p.test(text)); }
         // يزيل عبارات الإسناد الشائعة (زي "قال رسول الله صلى الله عليه وسلم") حتى لا تُحتسب بمفردها كحديث مطابق بلا مضمون فعلي
@@ -559,29 +573,64 @@
             return text.split(/[.،:؛!؟\n]+/).map(s => s.trim()).filter(s => s.length > 0);
         }
 
-        // ترجمة عامة عبر جوجل — تُستخدم للترجمة الحية العادية، ولأي لغة لا تتوفر لها ترجمة معتمدة محليًا
+        // ترجمة عامة — تُستخدم للترجمة الحية العادية، ولأي لغة لا تتوفر لها ترجمة معتمدة محليًا
         // ذاكرة تخزين مؤقت للترجمات — لو نفس الجملة (زي آية شائعة) اتذكرت أكتر من مرة، منترجمهاش تاني
         const translationCache = new Map();
 
+        async function translateViaWorker(text, targetLang) {
+            if (!TRANSLATE_WORKER_URL) throw new Error('Worker not configured');
+            const response = await fetch(TRANSLATE_WORKER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, targetLang })
+            });
+            if (!response.ok) throw new Error('Worker HTTP ' + response.status);
+            const data = await response.json();
+            const translated = (data && data.translated || '').trim();
+            if (!translated) throw new Error('Worker returned an empty translation');
+            return translated;
+        }
+
+        async function translateViaGoogle(text, targetLang) {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ar&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Google HTTP ' + response.status);
+            const data = await response.json();
+            let translated = "";
+            data[0].forEach(s => { if (s[0]) translated += s[0]; });
+            translated = translated.trim();
+            if (!translated) throw new Error('Google returned an empty translation');
+            return translated;
+        }
+
+        async function translateViaMyMemory(text, targetLang) {
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ar|${targetLang}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('MyMemory HTTP ' + response.status);
+            const data = await response.json();
+            const translated = (data && data.responseData && data.responseData.translatedText || '').trim();
+            if (!translated) throw new Error('MyMemory returned an empty translation');
+            return translated;
+        }
+
+        // يجرّب جوجل أولًا (مرتين بسرعة)، ولو فشل أو رجّع نص فاضي/ناقص ينتقل فورًا لخدمة بديلة
+        // بدل ما يستنى ويرجع نص ناقص للمصلي — وده بيقلل التأخير الكلي بدل ما يزوّده
         async function googleTranslate(text, targetLang) {
             const cacheKey = `${targetLang}::${text}`;
             if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
 
-            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ar&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+            const providers = TRANSLATE_WORKER_URL
+                ? [translateViaWorker, translateViaWorker, translateViaGoogle, translateViaMyMemory]
+                : [translateViaGoogle, translateViaGoogle, translateViaMyMemory, translateViaMyMemory];
             let lastError;
-            for (let attempt = 0; attempt < 3; attempt++) {
+            for (const provider of providers) {
                 try {
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error('HTTP ' + response.status);
-                    const data = await response.json();
-                    let translated = "";
-                    data[0].forEach(s => { if (s[0]) translated += s[0]; });
+                    const translated = await provider(text, targetLang);
                     translationCache.set(cacheKey, translated);
                     return translated;
                 } catch (e) {
                     lastError = e;
-                    // خدمة الترجمة المجانية أحيانًا بتحدّ عدد الطلبات السريعة المتتالية — إعادة محاولة قصيرة قبل الاستسلام
-                    await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
+                    await new Promise(r => setTimeout(r, 200));
                 }
             }
             throw lastError;
@@ -613,11 +662,16 @@
         function detectHadithInChunk(chunk) {
             // نتجاهل عبارات الإسناد الشائعة أولًا (زي "قال رسول الله صلى الله عليه وسلم" بمفردها بلا مضمون فعلي بعدها)
             const meaningfulPart = stripHadithBoilerplate(chunk);
-            if (normalizeArabic(meaningfulPart).length < MIN_HADITH_MATCH_LEN) return null;
+            const normStripped = normalizeArabic(meaningfulPart);
+            if (normStripped.length < MIN_HADITH_MATCH_LEN) return null;
 
-            const norm = normalizeArabic(chunk.trim());
-            if (norm.length < MIN_HADITH_MATCH_LEN) return null;
-            const best = hadithEntries.find(h => h.norm.includes(norm));
+            // نجرب المتن المجرّد (بعد إزالة الإسناد) أولًا — لأن نص الحديث في القاعدة قد يختلف إسناده
+            // عن الصيغة التي نطقها الإمام، ثم نجرب الجملة كاملة كخطة ثانية
+            let best = hadithEntries.find(h => h.norm.includes(normStripped));
+            if (!best) {
+                const norm = normalizeArabic(chunk.trim());
+                if (norm.length >= MIN_HADITH_MATCH_LEN) best = hadithEntries.find(h => h.norm.includes(norm));
+            }
             if (best) {
                 return { matched: true, collection: best.bn, idInBook: best.i, arabic: best.a, en: best.en };
             }

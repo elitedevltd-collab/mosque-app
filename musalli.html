@@ -542,10 +542,22 @@
 
         // عبارات دالة على أن الجملة قد تكون بداية أو جزءًا من حديث نبوي (فحص أولي سريع قبل مسح 14 ألف حديث)
         const HADITH_HINT_PATTERNS = [
-            /قال\s+رسول\s+الله/, /عن\s+أبي/, /عن\s+ابن/, /صلى\s+الله\s+عليه\s+وسلم/,
-            /رضي\s+الله\s+عن/, /حدثنا/, /أخبرنا/, /قال\s+النبي/
+            /قال\s+رسول\s+الله[^.،:؛]*/, /عن\s+أبي[^.،:؛]*/, /عن\s+ابن[^.،:؛]*/, /صلى\s+الله\s+عليه\s+وسلم/,
+            /رضي\s+الله\s+عن[^.،:؛]*/, /حدثنا[^.،:؛]*/, /أخبرنا[^.،:؛]*/, /قال\s+النبي[^.،:؛]*/
         ];
         function looksLikeHadith(text) { return HADITH_HINT_PATTERNS.some(p => p.test(text)); }
+        // يزيل عبارات الإسناد الشائعة (زي "قال رسول الله صلى الله عليه وسلم") حتى لا تُحتسب بمفردها كحديث مطابق بلا مضمون فعلي
+        function stripHadithBoilerplate(text) {
+            let stripped = text;
+            HADITH_HINT_PATTERNS.forEach(p => { stripped = stripped.replace(p, ' '); });
+            return stripped.trim();
+        }
+
+        // يقسّم أي نص طويل (خطبة كاملة) إلى جمل قصيرة عند علامات الترقيم، حتى يُفحص كل جزء بمفرده
+        // بدل فحص الفقرة كلها دفعة واحدة (وهو ما كان يفوّت أي آية/حديث غير الأبرز في النص)
+        function splitSentences(text) {
+            return text.split(/[.،:؛!؟\n]+/).map(s => s.trim()).filter(s => s.length > 0);
+        }
 
         // ترجمة عامة عبر جوجل — تُستخدم للترجمة الحية العادية، ولأي لغة لا تتوفر لها ترجمة معتمدة محليًا
         async function googleTranslate(text, targetLang) {
@@ -557,21 +569,20 @@
             return translated;
         }
 
-        // مطابقة آية قرآنية محليًا (بحث نصي في 6236 آية محمّلة في الذاكرة — بدون أي API)
-        async function detectQuranAyah(arabicText) {
-            if (!localDbReady) return null;
-            const clean = arabicText.trim();
-            if (clean.length < 8) return null; // تجاهل الأجزاء القصيرة جدًا لتقليل التطابقات الخاطئة
+        // مطابقة آية قرآنية محليًا لجملة واحدة (بحث نصي في 6236 آية محمّلة في الذاكرة — بدون أي API)
+        const MIN_QURAN_MATCH_LEN = 12; // أقل من كده بيمسك عبارات عامة زي "عباد الله" بالخطأ
+        function detectQuranInChunk(chunk) {
+            const clean = chunk.trim();
+            if (clean.length < 8) return null;
             const norm = normalizeArabic(clean);
             let best = null, bestLen = 0;
             for (const v of quranVerses) {
-                if (v.norm.length < 6) continue;
+                if (v.norm.length < MIN_QURAN_MATCH_LEN) continue;
                 if (norm.includes(v.norm) || v.norm.includes(norm)) {
                     const overlap = Math.min(v.norm.length, norm.length);
-                    if (overlap > bestLen) { bestLen = overlap; best = v; }
+                    if (overlap >= MIN_QURAN_MATCH_LEN && overlap > bestLen) { bestLen = overlap; best = v; }
                 }
             }
-            console.log('[Quran check]', clean, '→', best ? `سورة ${best.s}:${best.a}` : 'لا تطابق');
             if (best) {
                 const surahName = (quranSurahs[best.s] && quranSurahs[best.s].ar) || '';
                 return { surah: best.s, ayah: best.a, surahName, arabicMatch: best.ar, en: best.en };
@@ -579,19 +590,25 @@
             return null;
         }
 
-        // مطابقة حديث محليًا (بحث نصي في صحيح البخاري ومسلم، 14,736 حديثًا محمّلة في الذاكرة — بدون أي API)
-        async function detectHadith(arabicText) {
-            if (!localDbReady) return null;
-            if (!looksLikeHadith(arabicText)) return null;
-            const norm = normalizeArabic(arabicText.trim());
-            if (norm.length < 8) return { unmatched: true };
+        // مطابقة حديث محليًا لجملة واحدة (بحث نصي في صحيح البخاري ومسلم، 14,736 حديثًا — بدون أي API)
+        const MIN_HADITH_MATCH_LEN = 12;
+        function detectHadithInChunk(chunk) {
+            // نتجاهل عبارات الإسناد الشائعة أولًا (زي "قال رسول الله صلى الله عليه وسلم" بمفردها بلا مضمون فعلي بعدها)
+            const meaningfulPart = stripHadithBoilerplate(chunk);
+            if (normalizeArabic(meaningfulPart).length < MIN_HADITH_MATCH_LEN) return null;
+
+            const norm = normalizeArabic(chunk.trim());
+            if (norm.length < MIN_HADITH_MATCH_LEN) return null;
             const best = hadithEntries.find(h => h.norm.includes(norm));
-            console.log('[Hadith check]', arabicText, '→', best ? `${best.bn} #${best.i}` : 'لا تطابق دقيق');
             if (best) {
                 return { matched: true, collection: best.bn, idInBook: best.i, arabic: best.a, en: best.en };
             }
-            return { unmatched: true };
+            return null;
         }
+
+        // مطابقة آية أو حديث محليًا — تُبقى كأسماء متوافقة مع بقية الكود (كل واحدة تفحص جملة واحدة)
+        async function detectQuranAyah(arabicText) { return localDbReady ? detectQuranInChunk(arabicText) : null; }
+        async function detectHadith(arabicText) { return localDbReady ? detectHadithInChunk(arabicText) : null; }
 
         // معرّف الطلب الحالي — يمنع استجابة قديمة بطيئة من الكتابة فوق نتيجة أحدث ظهرت بالفعل
         let latestRequestId = 0;
@@ -617,51 +634,62 @@
         }
 
         async function detectAndLogQuranHadith(text, targetLang) {
-            try {
-                const quranMatch = await detectQuranAyah(text);
-                if (quranMatch) {
-                    let translated, verified;
-                    if (targetLang === 'en' && quranMatch.en) {
-                        translated = quranMatch.en; verified = true; // ترجمة إنجليزية مرفقة بقاعدة البيانات المحلية
-                    } else {
-                        translated = await googleTranslate(quranMatch.arabicMatch, targetLang);
-                        verified = false;
-                    }
-                    addQuranHadithEntry('quran', {
-                        arabic: quranMatch.arabicMatch,
-                        source: `سورة ${quranMatch.surahName} : ${quranMatch.ayah}`,
-                        translated,
-                        note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — لا نسخة معتمدة محليًا بهذه اللغة'
-                    });
-                    return;
-                }
+            if (!localDbReady) return;
+            const chunks = splitSentences(text);
+            // لو النص جملة واحدة قصيرة أصلاً، نفحصه هو نفسه كمان كاملاً (بجانب أجزائه) لضمان أفضل تغطية
+            if (chunks.length > 1) chunks.push(text.trim());
 
-                const hadithMatch = await detectHadith(text);
-                if (hadithMatch && hadithMatch.matched) {
-                    let translated, verified;
-                    if (targetLang === 'en' && hadithMatch.en) {
-                        translated = hadithMatch.en; verified = true;
-                    } else {
-                        translated = await googleTranslate(text, targetLang);
-                        verified = false;
+            const seen = new Set(); // لمنع تكرار نفس الآية/الحديث أكتر من مرة في نفس عملية النشر الواحدة
+
+            for (const chunk of chunks) {
+                try {
+                    const quranMatch = detectQuranInChunk(chunk);
+                    if (quranMatch) {
+                        const key = `q-${quranMatch.surah}-${quranMatch.ayah}`;
+                        if (seen.has(key)) continue;
+                        seen.add(key);
+
+                        let translated, verified;
+                        if (targetLang === 'en' && quranMatch.en) {
+                            translated = quranMatch.en; verified = true; // ترجمة إنجليزية مرفقة بقاعدة البيانات المحلية
+                        } else {
+                            translated = await googleTranslate(quranMatch.arabicMatch, targetLang);
+                            verified = false;
+                        }
+                        addQuranHadithEntry('quran', {
+                            arabic: quranMatch.arabicMatch,
+                            source: `سورة ${quranMatch.surahName} : ${quranMatch.ayah}`,
+                            translated,
+                            note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — لا نسخة معتمدة محليًا بهذه اللغة'
+                        });
+                        continue; // جملة اتطابقت كآية، منجربش نفس الجزء كحديث كمان
                     }
-                    addQuranHadithEntry('hadith', {
-                        arabic: text,
-                        source: `${hadithMatch.collection} — حديث رقم ${hadithMatch.idInBook}`,
-                        translated,
-                        note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — يُرجى المراجعة'
-                    });
-                } else if (hadithMatch && hadithMatch.unmatched) {
-                    const translated = await googleTranslate(text, targetLang);
-                    addQuranHadithEntry('hadith', {
-                        arabic: text,
-                        source: 'يُحتمل أنه حديث نبوي (لم نجد نصًا مطابقًا في صحيح البخاري أو مسلم محليًا)',
-                        translated,
-                        note: 'ترجمة آلية غير موثّقة — يُرجى مراجعة تخريجه'
-                    });
+
+                    const hadithMatch = detectHadithInChunk(chunk);
+                    if (hadithMatch && hadithMatch.matched) {
+                        const key = `h-${hadithMatch.idInBook}-${hadithMatch.collection}`;
+                        if (seen.has(key)) continue;
+                        seen.add(key);
+
+                        let translated, verified;
+                        if (targetLang === 'en' && hadithMatch.en) {
+                            translated = hadithMatch.en; verified = true;
+                        } else {
+                            translated = await googleTranslate(chunk, targetLang);
+                            verified = false;
+                        }
+                        addQuranHadithEntry('hadith', {
+                            arabic: chunk,
+                            source: `${hadithMatch.collection} — حديث رقم ${hadithMatch.idInBook}`,
+                            translated,
+                            note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — يُرجى المراجعة'
+                        });
+                    }
+                    // ملاحظة: الجمل التي "يُحتمل أنها حديث" بلا تطابق دقيق لم تعد تُعرض تلقائيًا هنا،
+                    // لتقليل التنبيهات غير الدقيقة عند نشر فقرات كاملة — البحث اليدوي في تاب "القرآن والسنة" يبقى متاحًا دائمًا.
+                } catch (e) {
+                    console.error('Quran/Hadith detection error for chunk:', chunk, e);
                 }
-            } catch (e) {
-                console.error('Quran/Hadith detection error', e);
             }
         }
 

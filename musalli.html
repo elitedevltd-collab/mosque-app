@@ -361,24 +361,52 @@
         let quranVerses = [];
         let quranSurahs = {};
         let hadithEntries = [];
+        let quranBigramIndex = null;
+        let hadithBigramIndex = null;
+        let versesBySurahAyah = null;
         let localDbReady = false;
 
-        // إزالة التشكيل وتوحيد صور الحروف حتى يتطابق النص المسموع (بلا تشكيل) مع نص القرآن/الحديث (بتشكيل كامل)
+        // ===== محرك الكشف الجديد: مطابقة على مستوى الكلمات مع سماحية أخطاء التعرف الصوتي =====
+        // إزالة التشكيل وتوحيد صور الحروف حتى يتطابق النص المسموع (إملائي بلا تشكيل) مع نص المصحف (رسم عثماني كامل التشكيل)
         function normalizeArabic(text) {
             return (text || '')
-                .replace(/\u0670/g, 'ا') // الألف الخنجرية تُنطق ألفًا كاملة، فنحوّلها بدل حذفها (وإلا لن تُطابق كلمات مثل "العالمين")
-                .replace(/[\u064B-\u065F\u0610-\u061A\u06D6-\u06ED]/g, '') // إزالة بقية علامات التشكيل
-                .replace(/\u0640/g, '') // إزالة التطويل
-                .replace(/[،؛؟.!«»"'()\[\]{}:۔–—-]/g, ' ') // إزالة علامات الترقيم — نص الحديث في القاعدة يحتوي فواصل (،) داخل المتن بينما النطق المسموع بدونها، فكانت تمنع التطابق
-                .replace(/[إأآاٱ]/g, 'ا') // توحيد كل صور الألف (بما فيها ألف الوصل ٱ المستخدمة في نص القرآن)
+                .replace(/[\u06D6-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g, '') // علامات الوقف القرآنية والرموز العلوية الخاصة
+                .replace(/([\u0649\u064A])\u0670/g, '$1') // الألف الخنجرية بعد ى/ي تُحذف (تولّىٰ → تولى)
+                .replace(/\u0670/g, 'ا') // الألف الخنجرية الوسطية تُنطق ألفًا (للإنسٰن → للانسان، خٰلدين → خالدين)
+                .replace(/الرحمان/g, 'الرحمن').replace(/الاه/g, 'اله') // مرادفات إملائية: التعرف الصوتي يكتبها بلا ألف وسطية
+                .replace(/[\u064B-\u065F\u0610-\u061A]/g, '') // بقية علامات التشكيل
+                .replace(/\u0640/g, '') // التطويل
+                .replace(/[،؛؟.!«»"'()\[\]{}:۔–—\-\u200f\u200e\u202a-\u202e﴾﴿۞]/g, ' ') // علامات الترقيم ومحارف الاتجاه الخفية
+                .replace(/\u0621/g, 'ا') // الهمزة على السطر: أَفَرَءَيۡتَ → افرايت، ءامنوا → اامنوا (تُدمج لاحقًا)
+                .replace(/[إأآاٱ]/g, 'ا') // توحيد كل صور الألف (بما فيها ألف الوصل ٱ)
                 .replace(/ى/g, 'ي')
                 .replace(/ة/g, 'ه')
                 .replace(/ؤ/g, 'و')
                 .replace(/ئ/g, 'ي')
-                .replace(/ء/g, '') // الهمزة المفردة: نص القرآن يكتب "ءامنوا" بينما التعرف الصوتي يكتب "امنوا" — حذفها يوحّد الصورتين
-                .replace(/يا\s+اي/g, 'يااي') // نداء "يا أيها": نص القرآن يكتبها موصولة "ياأيها" بينما التعرف الصوتي يفصلها — نوحّد الصورتين
+                .replace(/اا+/g, 'ا') // ألفان متتاليتان نتجتا عن التطبيع → واحدة
+                .replace(/يا\s+اي/g, 'يااي') // نداء "يا أيها" موصولة/مفصولة
                 .replace(/\s+/g, ' ')
                 .trim();
+        }
+
+        // تقسيم النص المطبّع لكلمات (نتجاهل كلمات الحرف الواحد)
+        function tokenizeWords(normText) {
+            return normText.split(' ').filter(function(w) { return w.length >= 2; });
+        }
+
+        // فهرس عكسي: كل كلمتين متتاليتين (bigram) ← قائمة الآيات/الأحاديث التي تحتويهما — يجعل الكشف فوريًا (مللي ثوانٍ)
+        function buildBigramIndex(entries) {
+            const index = new Map();
+            entries.forEach(function(e, idx) {
+                const words = e.words;
+                for (let i = 0; i < words.length - 1; i++) {
+                    const bg = words[i] + ' ' + words[i + 1];
+                    let list = index.get(bg);
+                    if (!list) { list = []; index.set(bg, list); }
+                    if (list[list.length - 1] !== idx) list.push(idx);
+                }
+            });
+            return index;
         }
 
         async function loadLocalDatabases() {
@@ -393,8 +421,11 @@
                 const hData = await hRes.json();
 
                 quranSurahs = qData.surahs;
-                quranVerses = qData.verses.map(v => ({ ...v, norm: normalizeArabic(v.ar) }));
-                hadithEntries = hData.map(h => ({ ...h, norm: normalizeArabic(h.a) }));
+                quranVerses = qData.verses.map(v => { const norm = normalizeArabic(v.ar); return { ...v, norm, words: tokenizeWords(norm) }; });
+                hadithEntries = hData.map(h => { const norm = normalizeArabic(h.a); return { ...h, norm, words: tokenizeWords(norm) }; });
+                quranBigramIndex = buildBigramIndex(quranVerses);
+                hadithBigramIndex = buildBigramIndex(hadithEntries);
+                versesBySurahAyah = new Map(quranVerses.map(v => [v.s + ':' + v.a, v]));
 
                 localDbReady = true;
                 showVerseOfTheDay();
@@ -551,28 +582,6 @@
             }, 700);
         }
 
-        // عبارات دالة على أن الجملة قد تكون بداية أو جزءًا من حديث نبوي (فحص أولي سريع قبل مسح 14 ألف حديث)
-        // ملحوظة مهمة: الأنماط هنا تلتقط عبارة الإسناد فقط (بدون التهام متن الحديث نفسه) —
-        // النسخة القديمة كانت تبلع الجملة كلها حتى أول علامة ترقيم، فيفشل كشف الحديث لو قاله الإمام مسبوقًا بـ "قال رسول الله صلى الله عليه وسلم"
-        const HADITH_HINT_PATTERNS = [
-            /قال\s+رسول\s+الله(?:\s+صلى\s+الله\s+عليه\s+وسلم)?/, /قال\s+النبي(?:\s+صلى\s+الله\s+عليه\s+وسلم)?/,
-            /صلى\s+الله\s+عليه\s+وسلم/, /رضي\s+الله\s+عن(?:هما|هم|ها|ه)?/,
-            /عن\s+أبي\s+\S+/, /عن\s+ابن\s+\S+/, /حدثنا\s+\S+/, /أخبرنا\s+\S+/
-        ];
-        function looksLikeHadith(text) { return HADITH_HINT_PATTERNS.some(p => p.test(text)); }
-        // يزيل عبارات الإسناد الشائعة (زي "قال رسول الله صلى الله عليه وسلم") حتى لا تُحتسب بمفردها كحديث مطابق بلا مضمون فعلي
-        function stripHadithBoilerplate(text) {
-            let stripped = text;
-            HADITH_HINT_PATTERNS.forEach(p => { stripped = stripped.replace(p, ' '); });
-            return stripped.trim();
-        }
-
-        // يقسّم أي نص طويل (خطبة كاملة) إلى جمل قصيرة عند علامات الترقيم، حتى يُفحص كل جزء بمفرده
-        // بدل فحص الفقرة كلها دفعة واحدة (وهو ما كان يفوّت أي آية/حديث غير الأبرز في النص)
-        function splitSentences(text) {
-            return text.split(/[.،:؛!؟\n]+/).map(s => s.trim()).filter(s => s.length > 0);
-        }
-
         // ترجمة عامة — تُستخدم للترجمة الحية العادية، ولأي لغة لا تتوفر لها ترجمة معتمدة محليًا
         // ذاكرة تخزين مؤقت للترجمات — لو نفس الجملة (زي آية شائعة) اتذكرت أكتر من مرة، منترجمهاش تاني
         const translationCache = new Map();
@@ -636,51 +645,159 @@
             throw lastError;
         }
 
-        // مطابقة آية قرآنية محليًا لجملة واحدة (بحث نصي في 6236 آية محمّلة في الذاكرة — بدون أي API)
-        const MIN_QURAN_MATCH_LEN = 12; // أقل من كده بيمسك عبارات عامة زي "عباد الله" بالخطأ
-        function detectQuranInChunk(chunk) {
-            const clean = chunk.trim();
-            if (clean.length < 8) return null;
-            const norm = normalizeArabic(clean);
-            let best = null, bestLen = 0;
-            for (const v of quranVerses) {
-                if (v.norm.length < MIN_QURAN_MATCH_LEN) continue;
-                if (norm.includes(v.norm) || v.norm.includes(norm)) {
-                    const overlap = Math.min(v.norm.length, norm.length);
-                    if (overlap >= MIN_QURAN_MATCH_LEN && overlap > bestLen) { bestLen = overlap; best = v; }
+        // ===== محرك المطابقة الضبابية على مستوى الكلمات =====
+        // لماذا؟ التعرف الصوتي يخطئ في كلمات ("قطع" بدل "انقطع"، "تشاون" بدل "تشاقون") ولا يرسل علامات ترقيم،
+        // فالمطابقة الحرفية (substring) مستحيلة عمليًا في الخطبة الحية. هذا المحرك يحاذي الكلمات واحدةً واحدةً
+        // مع السماح بأخطاء محدودة (كلمة مختلفة/محذوفة/مضافة)، ويكتشف عدة اقتباسات من سور مختلفة في نفس المقطع.
+
+        // تشابه كلمتين (خطأ تعرف صوتي بسيط): احتواء أو مسافة تحرير ≤ 2 للكلمات الطويلة
+        function wordsSimilar(a, b) {
+            if (a === b) return true;
+            if (Math.abs(a.length - b.length) > 2) return false;
+            const shorter = a.length < b.length ? a : b;
+            const longer = a.length < b.length ? b : a;
+            if (shorter.length < 3) return false;
+            if (longer.includes(shorter)) return true; // قطع/انقطع، يري/يراه
+            const maxDist = longer.length >= 5 ? 2 : 1;
+            return editDistanceAtMost(a, b, maxDist);
+        }
+        function editDistanceAtMost(a, b, k) {
+            if (Math.abs(a.length - b.length) > k) return false;
+            const m = a.length, n = b.length;
+            let prev = Array.from({ length: n + 1 }, (_, j) => j);
+            for (let i = 1; i <= m; i++) {
+                const cur = [i];
+                let rowMin = i;
+                for (let j = 1; j <= n; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                    if (cur[j] < rowMin) rowMin = cur[j];
+                }
+                if (rowMin > k) return false;
+                prev = cur;
+            }
+            return prev[n] <= k;
+        }
+
+        // محاذاة كلمات الخطيب مع كلمات آية/حديث بدءًا من موضع معين، مع سماحية أخطاء متناسبة
+        function alignSpan(spokenWords, si, entryWords, vi, maxErrRatio) {
+            let matched = 0, errors = 0;
+            let i = si, j = vi;
+            let lastMatchI = si - 1, lastMatchJ = vi - 1;
+            while (i < spokenWords.length && j < entryWords.length) {
+                if (spokenWords[i] === entryWords[j]) {
+                    matched++; lastMatchI = i; lastMatchJ = j; i++; j++;
+                } else if (wordsSimilar(spokenWords[i], entryWords[j])) {
+                    matched += 0.75; errors += 0.25; lastMatchI = i; lastMatchJ = j; i++; j++;
+                } else if (i + 1 < spokenWords.length && spokenWords[i + 1] === entryWords[j]) { errors++; i++; }
+                else if (j + 1 < entryWords.length && spokenWords[i] === entryWords[j + 1]) { errors++; j++; }
+                else if (i + 1 < spokenWords.length && j + 1 < entryWords.length && spokenWords[i + 1] === entryWords[j + 1]) { errors++; i++; j++; }
+                else break;
+                if (errors > Math.max(2, (matched + errors) * maxErrRatio)) break;
+            }
+            return { matched, errors, spokenEnd: lastMatchI, entryEnd: lastMatchJ };
+        }
+
+        // المسح الرئيسي: نافذة منزلقة على كلمات الخطيب — كل كلمتين متتاليتين تُبحثان في الفهرس،
+        // وأفضل محاذاة تُسجّل ثم نواصل المسح بعد نهايتها (فيكتشف عدة اقتباسات متتالية)
+        function detectQuotes(spokenWords, entries, index, opts) {
+            const minWords = opts.minWords, maxErrRatio = opts.maxErrRatio || 0.34;
+            const results = [];
+            let si = 0;
+            while (si < spokenWords.length - 1) {
+                const bg = spokenWords[si] + ' ' + spokenWords[si + 1];
+                const candidates = index.get(bg);
+                let best = null;
+                if (candidates) {
+                    for (const idx of candidates) {
+                        const e = entries[idx];
+                        for (let j = 0; j < e.words.length - 1; j++) {
+                            if (e.words[j] !== spokenWords[si] || e.words[j + 1] !== spokenWords[si + 1]) continue;
+                            const span = alignSpan(spokenWords, si, e.words, j, maxErrRatio);
+                            // الآيات القصيرة: نقبلها لو تغطت بالكامل تقريبًا (80%+ من كلماتها)
+                            const effMinWords = Math.min(minWords, Math.max(2.5, e.words.length * 0.8));
+                            if (span.matched >= effMinWords) {
+                                const score = span.matched - span.errors * 0.5;
+                                if (!best || score > best.score) best = { entryIdx: idx, score, span, startWord: si, entryStart: j };
+                            }
+                        }
+                    }
+                }
+                if (best) { results.push(best); si = best.span.spokenEnd + 1; }
+                else si++;
+            }
+            return results;
+        }
+
+        // ترجيح السياق: آية متكررة النص في أكثر من سورة (مثل "ولا تزر وازرة...") — نختار النسخة التي تواصل سياق التلاوة الجارية
+        function preferContextualVerses(matches) {
+            return matches.map(function(m, k) {
+                const v = quranVerses[m.entryIdx];
+                const prev = k > 0 ? quranVerses[matches[k - 1].entryIdx] : null;
+                const next = k < matches.length - 1 ? quranVerses[matches[k + 1].entryIdx] : null;
+                const fitsContext = function(x) { return (prev && x.s === prev.s && x.a > prev.a && x.a - prev.a <= 4) || (next && x.s === next.s && x.a < next.a && next.a - x.a <= 4); };
+                if (fitsContext(v)) return m;
+                const vSet = new Set(v.words);
+                for (let xi = 0; xi < quranVerses.length; xi++) {
+                    if (xi === m.entryIdx) continue;
+                    const x = quranVerses[xi];
+                    if (!fitsContext(x)) continue;
+                    let n = 0; for (const w of x.words) if (vSet.has(w)) n++;
+                    if (n >= Math.min(x.words.length, v.words.length) * 0.7) return { ...m, entryIdx: xi };
+                }
+                return m;
+            });
+        }
+
+        // تمديد النطاق للخلف: لو التلاوة اكتُشفت من الآية 34، نفحص هل الآية 33 منطوقة قبلها أيضًا
+        // (أول كلمتين فيها قد تختلفان بسبب خطأ تعرف صوتي مثل "فرأيت" بدل "أفرأيت" فتفلت من الفهرس)
+        function extendRangesBackward(matches, spokenWords) {
+            for (const m of matches) {
+                let v = quranVerses[m.entryIdx];
+                while (m.startWord > 0 && v.a > 1) {
+                    const prevVerse = versesBySurahAyah.get(v.s + ':' + (v.a - 1));
+                    if (!prevVerse) break;
+                    const pw = prevVerse.words;
+                    const from = Math.max(0, m.startWord - pw.length - 2);
+                    const windowWords = spokenWords.slice(from, m.startWord);
+                    let matched = 0;
+                    for (const w of pw) if (windowWords.some(function(x) { return x === w || wordsSimilar(x, w); })) matched++;
+                    if (matched >= Math.max(2, pw.length * 0.6)) { m.extraFromAyah = prevVerse.a; m.startWord = from; v = prevVerse; }
+                    else break;
                 }
             }
-            if (best) {
-                const surahName = (quranSurahs[best.s] && quranSurahs[best.s].ar) || '';
-                return { surah: best.s, ayah: best.a, surahName, arabicMatch: best.ar, en: best.en };
-            }
-            return null;
+            return matches;
         }
 
-        // مطابقة حديث محليًا لجملة واحدة (بحث نصي في صحيح البخاري ومسلم، 14,736 حديثًا — بدون أي API)
-        const MIN_HADITH_MATCH_LEN = 12;
-        function detectHadithInChunk(chunk) {
-            // نتجاهل عبارات الإسناد الشائعة أولًا (زي "قال رسول الله صلى الله عليه وسلم" بمفردها بلا مضمون فعلي بعدها)
-            const meaningfulPart = stripHadithBoilerplate(chunk);
-            const normStripped = normalizeArabic(meaningfulPart);
-            if (normStripped.length < MIN_HADITH_MATCH_LEN) return null;
-
-            // نجرب المتن المجرّد (بعد إزالة الإسناد) أولًا — لأن نص الحديث في القاعدة قد يختلف إسناده
-            // عن الصيغة التي نطقها الإمام، ثم نجرب الجملة كاملة كخطة ثانية
-            let best = hadithEntries.find(h => h.norm.includes(normStripped));
-            if (!best) {
-                const norm = normalizeArabic(chunk.trim());
-                if (norm.length >= MIN_HADITH_MATCH_LEN) best = hadithEntries.find(h => h.norm.includes(norm));
+        // دمج الآيات المتتالية من نفس السورة في نطاق واحد (النجم 33-42 بطاقة واحدة بدل 10 بطاقات)
+        function mergeVerseRanges(matches) {
+            if (!matches.length) return [];
+            const sorted = matches.slice().sort(function(a, b) { return a.startWord - b.startWord; });
+            const ranges = [];
+            for (const m of sorted) {
+                const v = quranVerses[m.entryIdx];
+                const fromAyah = m.extraFromAyah != null ? Math.min(m.extraFromAyah, v.a) : v.a;
+                const last = ranges[ranges.length - 1];
+                if (last && last.surah === v.s && fromAyah >= last.ayahFrom && fromAyah <= last.ayahTo + 3) {
+                    last.ayahTo = Math.max(last.ayahTo, v.a);
+                } else {
+                    ranges.push({ surah: v.s, ayahFrom: fromAyah, ayahTo: v.a });
+                }
             }
-            if (best) {
-                return { matched: true, collection: best.bn, idInBook: best.i, arabic: best.a, en: best.en };
-            }
-            return null;
+            return ranges;
         }
 
-        // مطابقة آية أو حديث محليًا — تُبقى كأسماء متوافقة مع بقية الكود (كل واحدة تفحص جملة واحدة)
-        async function detectQuranAyah(arabicText) { return localDbReady ? detectQuranInChunk(arabicText) : null; }
-        async function detectHadith(arabicText) { return localDbReady ? detectHadithInChunk(arabicText) : null; }
+        // إزالة عبارات الإسناد المطبّعة قبل مطابقة الأحاديث — حتى لا يطابق الإسناد وحده حديثًا كاملًا
+        // ("قال رسول الله صلى الله عليه وسلم" — 7 كلمات موجودة حرفيًا في آلاف الأحاديث)
+        const ISNAD_PHRASES_NORM = [
+            'قال رسول الله صلي الله عليه وسلم', 'قال النبي صلي الله عليه وسلم',
+            'رسول الله صلي الله عليه وسلم', 'صلي الله عليه وسلم',
+            'رضي الله عنهما', 'رضي الله عنها', 'رضي الله عنهم', 'رضي الله عنه'
+        ];
+        function stripIsnadNorm(normText) {
+            let out = ' ' + normText + ' ';
+            for (const p of ISNAD_PHRASES_NORM) out = out.split(' ' + p + ' ').join(' ');
+            return out.replace(/\s+/g, ' ').trim();
+        }
 
         // معرّف الطلب الحالي — يمنع استجابة قديمة بطيئة من الكتابة فوق نتيجة أحدث ظهرت بالفعل
         let latestRequestId = 0;
@@ -705,80 +822,118 @@
             detectAndLogQuranHadith(text, targetLang);
         }
 
+        // ذاكرة الجلسة: ما عُرض بالفعل خلال الخطبة الحالية — التعرف الصوتي يرسل نفس المقطع مرات متتالية
+        // وهو يتوسع، فنحدّث البطاقة الموجودة (مثلاً النجم 33-35 تصبح 33-42) بدل تكرارها
+        const shownQuranRanges = new Map(); // surah -> {ayahFrom, ayahTo, el}
+        const shownHadiths = new Set();     // "collection#id"
+
         async function detectAndLogQuranHadith(text, targetLang) {
             if (!localDbReady) return;
-            const chunks = splitSentences(text);
-            // لو النص جملة واحدة قصيرة أصلاً، نفحصه هو نفسه كمان كاملاً (بجانب أجزائه) لضمان أفضل تغطية
-            if (chunks.length > 1) chunks.push(text.trim());
+            const spokenWords = tokenizeWords(normalizeArabic(text));
+            if (spokenWords.length < 2) return;
 
-            const seen = new Set(); // لمنع تكرار نفس الآية/الحديث أكتر من مرة في نفس عملية النشر الواحدة
+            // ---- القرآن: مسح + ترجيح سياقي + تمديد للخلف + دمج نطاقات ----
+            let qMatches = detectQuotes(spokenWords, quranVerses, quranBigramIndex, { minWords: 3.5, maxErrRatio: 0.34 });
+            qMatches = preferContextualVerses(qMatches);
+            qMatches = extendRangesBackward(qMatches, spokenWords);
+            const ranges = mergeVerseRanges(qMatches);
 
-            // نجهّز كل التطابقات أولًا (سريع، بدون شبكة)، وبعدين نترجمها كلها بالتوازي بدل التتابع —
-            // ده يقلل التأخير الكلي، وأي فشل ترجمة لواحدة منها ميأثرش على البواقي
-            const matches = [];
-            for (const chunk of chunks) {
-                const quranMatch = detectQuranInChunk(chunk);
-                if (quranMatch) {
-                    const key = `q-${quranMatch.surah}-${quranMatch.ayah}`;
-                    if (!seen.has(key)) { seen.add(key); matches.push({ kind: 'quran', data: quranMatch, chunk }); }
-                    continue;
-                }
-                const hadithMatch = detectHadithInChunk(chunk);
-                if (hadithMatch && hadithMatch.matched) {
-                    const key = `h-${hadithMatch.idInBook}-${hadithMatch.collection}`;
-                    if (!seen.has(key)) { seen.add(key); matches.push({ kind: 'hadith', data: hadithMatch, chunk }); }
+            // ---- الحديث: نزيل الإسناد من كلام الخطيب ثم نطابق (عتبة أعلى لأن لغة الحديث أقرب لكلام الناس) ----
+            const strippedWords = tokenizeWords(stripIsnadNorm(normalizeArabic(text)));
+            const hMatches = detectQuotes(strippedWords, hadithEntries, hadithBigramIndex, { minWords: 5, maxErrRatio: 0.34 });
+
+            const tasks = [];
+
+            for (const r of ranges) {
+                const existing = shownQuranRanges.get(r.surah);
+                if (existing && r.ayahFrom >= existing.ayahFrom - 3 && r.ayahFrom <= existing.ayahTo + 3) {
+                    // نفس التلاوة مستمرة — وسّع النطاق المعروض لو زاد
+                    const newFrom = Math.min(existing.ayahFrom, r.ayahFrom);
+                    const newTo = Math.max(existing.ayahTo, r.ayahTo);
+                    if (newFrom !== existing.ayahFrom || newTo !== existing.ayahTo) {
+                        existing.ayahFrom = newFrom; existing.ayahTo = newTo;
+                        tasks.push(renderQuranRange(r.surah, newFrom, newTo, targetLang, existing));
+                    }
+                } else {
+                    const state = { ayahFrom: r.ayahFrom, ayahTo: r.ayahTo, el: null };
+                    shownQuranRanges.set(r.surah, state);
+                    tasks.push(renderQuranRange(r.surah, r.ayahFrom, r.ayahTo, targetLang, state));
                 }
             }
 
-            await Promise.all(matches.map(async (m) => {
-                try {
-                    if (m.kind === 'quran') {
-                        const quranMatch = m.data;
-                        let translated, verified;
-                        try {
-                            if (targetLang === 'en' && quranMatch.en) {
-                                translated = quranMatch.en; verified = true; // ترجمة إنجليزية مرفقة بقاعدة البيانات المحلية
-                            } else {
-                                translated = await googleTranslate(quranMatch.arabicMatch, targetLang);
-                                verified = false;
-                            }
-                        } catch (e) {
-                            translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
-                            verified = false;
-                        }
-                        addQuranHadithEntry('quran', {
-                            arabic: quranMatch.arabicMatch,
-                            source: `سورة ${quranMatch.surahName} : ${quranMatch.ayah}`,
-                            translated,
-                            note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — لا نسخة معتمدة محليًا بهذه اللغة'
-                        });
-                    } else {
-                        const hadithMatch = m.data;
-                        let translated, verified;
-                        try {
-                            if (targetLang === 'en' && hadithMatch.en) {
-                                translated = hadithMatch.en; verified = true;
-                            } else {
-                                translated = await googleTranslate(m.chunk, targetLang);
-                                verified = false;
-                            }
-                        } catch (e) {
-                            translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
-                            verified = false;
-                        }
-                        addQuranHadithEntry('hadith', {
-                            arabic: m.chunk,
-                            source: `${hadithMatch.collection} — حديث رقم ${hadithMatch.idInBook}`,
-                            translated,
-                            note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — يُرجى المراجعة'
-                        });
-                    }
-                    // ملاحظة: الجمل التي "يُحتمل أنها حديث" بلا تطابق دقيق لم تعد تُعرض تلقائيًا هنا،
-                    // لتقليل التنبيهات غير الدقيقة عند نشر فقرات كاملة — البحث اليدوي في تاب "القرآن والسنة" يبقى متاحًا دائمًا.
-                } catch (e) {
-                    console.error('Quran/Hadith entry render error:', e);
+            const seenNow = new Set();
+            for (const m of hMatches) {
+                const h = hadithEntries[m.entryIdx];
+                const hKey = h.bn + '#' + h.i;
+                if (shownHadiths.has(hKey) || seenNow.has(hKey)) continue;
+                seenNow.add(hKey); shownHadiths.add(hKey);
+                tasks.push(renderHadith(h, targetLang));
+            }
+
+            await Promise.all(tasks);
+        }
+
+        // يعرض (أو يحدّث) بطاقة نطاق آيات: آية واحدة أو تلاوة متتالية (مثل النجم 33-42) في بطاقة واحدة مرتبة
+        async function renderQuranRange(surah, ayahFrom, ayahTo, targetLang, state) {
+            try {
+                const surahName = (quranSurahs[surah] && quranSurahs[surah].ar) || '';
+                const versesInRange = [];
+                for (let a = ayahFrom; a <= ayahTo; a++) {
+                    const v = versesBySurahAyah.get(surah + ':' + a);
+                    if (v) versesInRange.push(v);
                 }
-            }));
+                if (!versesInRange.length) return;
+
+                const arabicFull = versesInRange.map(v => `${v.ar} （${v.a}）`).join(' ');
+                let translated, verified;
+                try {
+                    if (targetLang === 'en' && versesInRange.every(v => v.en)) {
+                        translated = versesInRange.map(v => `(${v.a}) ${v.en}`).join(' ');
+                        verified = true; // ترجمة معتمدة من قاعدة البيانات المحلية
+                    } else {
+                        translated = await googleTranslate(versesInRange.map(v => v.ar).join(' ● '), targetLang);
+                        verified = false;
+                    }
+                } catch (e) {
+                    translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
+                    verified = false;
+                }
+
+                const sourceLabel = ayahFrom === ayahTo
+                    ? `سورة ${surahName} : الآية ${ayahFrom}`
+                    : `سورة ${surahName} : الآيات ${ayahFrom}–${ayahTo}`;
+                const note = verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — لا نسخة معتمدة محليًا بهذه اللغة';
+
+                if (state.el && state.el.isConnected) {
+                    // تحديث البطاقة القائمة (التلاوة امتدت)
+                    state.el.querySelector('.qh-badge').textContent = `📖 آية قرآنية — ${sourceLabel}`;
+                    state.el.querySelector('.qh-arabic').textContent = `﴾ ${arabicFull} ﴿`;
+                    state.el.querySelector('.qh-translation').textContent = translated || '—';
+                    const noteEl = state.el.querySelector('.qh-note');
+                    if (noteEl) noteEl.textContent = note;
+                } else {
+                    state.el = addQuranHadithEntry('quran', { arabic: arabicFull, source: sourceLabel, translated, note });
+                }
+            } catch (e) { console.error('Quran range render error:', e); }
+        }
+
+        async function renderHadith(h, targetLang) {
+            try {
+                let translated, verified;
+                try {
+                    if (targetLang === 'en' && h.en) { translated = h.en; verified = true; }
+                    else { translated = await googleTranslate(h.a, targetLang); verified = false; }
+                } catch (e) {
+                    translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
+                    verified = false;
+                }
+                addQuranHadithEntry('hadith', {
+                    arabic: h.a, // نص الحديث المعتمد من القاعدة (لا ما التقطه الميكروفون بأخطائه)
+                    source: `${h.bn} — حديث رقم ${h.i}`,
+                    translated,
+                    note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — يُرجى المراجعة'
+                });
+            } catch (e) { console.error('Hadith render error:', e); }
         }
 
         function addQuranHadithEntry(type, entry) {
@@ -791,12 +946,13 @@
             const badgeLabel = type === 'quran' ? '📖 آية قرآنية' : '✨ حديث نبوي';
             item.innerHTML = `
                 <div class="qh-badge">${badgeLabel} — ${entry.source}</div>
-                <div class="qh-arabic">﴿ ${entry.arabic} ﴾</div>
+                <div class="qh-arabic">﴾ ${entry.arabic} ﴿</div>
                 <div class="qh-translation">${entry.translated || '—'}</div>
                 ${entry.note ? `<div class="qh-note">${entry.note}</div>` : ''}
             `;
             log.insertBefore(item, log.firstChild);
             while (log.children.length > 10) log.removeChild(log.lastChild);
+            return item; // نرجع العنصر حتى تمكن تحديث بطاقة نطاق آيات قائمة أثناء امتداد التلاوة
         }
 
         function changeLanguage() {

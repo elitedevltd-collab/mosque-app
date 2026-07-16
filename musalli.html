@@ -560,13 +560,31 @@
         }
 
         // ترجمة عامة عبر جوجل — تُستخدم للترجمة الحية العادية، ولأي لغة لا تتوفر لها ترجمة معتمدة محليًا
+        // ذاكرة تخزين مؤقت للترجمات — لو نفس الجملة (زي آية شائعة) اتذكرت أكتر من مرة، منترجمهاش تاني
+        const translationCache = new Map();
+
         async function googleTranslate(text, targetLang) {
+            const cacheKey = `${targetLang}::${text}`;
+            if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+
             const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ar&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-            const response = await fetch(url);
-            const data = await response.json();
-            let translated = "";
-            data[0].forEach(s => { if (s[0]) translated += s[0]; });
-            return translated;
+            let lastError;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    const data = await response.json();
+                    let translated = "";
+                    data[0].forEach(s => { if (s[0]) translated += s[0]; });
+                    translationCache.set(cacheKey, translated);
+                    return translated;
+                } catch (e) {
+                    lastError = e;
+                    // خدمة الترجمة المجانية أحيانًا بتحدّ عدد الطلبات السريعة المتتالية — إعادة محاولة قصيرة قبل الاستسلام
+                    await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
+                }
+            }
+            throw lastError;
         }
 
         // مطابقة آية قرآنية محليًا لجملة واحدة (بحث نصي في 6236 آية محمّلة في الذاكرة — بدون أي API)
@@ -641,19 +659,37 @@
 
             const seen = new Set(); // لمنع تكرار نفس الآية/الحديث أكتر من مرة في نفس عملية النشر الواحدة
 
+            // نجهّز كل التطابقات أولًا (سريع، بدون شبكة)، وبعدين نترجمها كلها بالتوازي بدل التتابع —
+            // ده يقلل التأخير الكلي، وأي فشل ترجمة لواحدة منها ميأثرش على البواقي
+            const matches = [];
             for (const chunk of chunks) {
-                try {
-                    const quranMatch = detectQuranInChunk(chunk);
-                    if (quranMatch) {
-                        const key = `q-${quranMatch.surah}-${quranMatch.ayah}`;
-                        if (seen.has(key)) continue;
-                        seen.add(key);
+                const quranMatch = detectQuranInChunk(chunk);
+                if (quranMatch) {
+                    const key = `q-${quranMatch.surah}-${quranMatch.ayah}`;
+                    if (!seen.has(key)) { seen.add(key); matches.push({ kind: 'quran', data: quranMatch, chunk }); }
+                    continue;
+                }
+                const hadithMatch = detectHadithInChunk(chunk);
+                if (hadithMatch && hadithMatch.matched) {
+                    const key = `h-${hadithMatch.idInBook}-${hadithMatch.collection}`;
+                    if (!seen.has(key)) { seen.add(key); matches.push({ kind: 'hadith', data: hadithMatch, chunk }); }
+                }
+            }
 
+            await Promise.all(matches.map(async (m) => {
+                try {
+                    if (m.kind === 'quran') {
+                        const quranMatch = m.data;
                         let translated, verified;
-                        if (targetLang === 'en' && quranMatch.en) {
-                            translated = quranMatch.en; verified = true; // ترجمة إنجليزية مرفقة بقاعدة البيانات المحلية
-                        } else {
-                            translated = await googleTranslate(quranMatch.arabicMatch, targetLang);
+                        try {
+                            if (targetLang === 'en' && quranMatch.en) {
+                                translated = quranMatch.en; verified = true; // ترجمة إنجليزية مرفقة بقاعدة البيانات المحلية
+                            } else {
+                                translated = await googleTranslate(quranMatch.arabicMatch, targetLang);
+                                verified = false;
+                            }
+                        } catch (e) {
+                            translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
                             verified = false;
                         }
                         addQuranHadithEntry('quran', {
@@ -662,24 +698,22 @@
                             translated,
                             note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — لا نسخة معتمدة محليًا بهذه اللغة'
                         });
-                        continue; // جملة اتطابقت كآية، منجربش نفس الجزء كحديث كمان
-                    }
-
-                    const hadithMatch = detectHadithInChunk(chunk);
-                    if (hadithMatch && hadithMatch.matched) {
-                        const key = `h-${hadithMatch.idInBook}-${hadithMatch.collection}`;
-                        if (seen.has(key)) continue;
-                        seen.add(key);
-
+                    } else {
+                        const hadithMatch = m.data;
                         let translated, verified;
-                        if (targetLang === 'en' && hadithMatch.en) {
-                            translated = hadithMatch.en; verified = true;
-                        } else {
-                            translated = await googleTranslate(chunk, targetLang);
+                        try {
+                            if (targetLang === 'en' && hadithMatch.en) {
+                                translated = hadithMatch.en; verified = true;
+                            } else {
+                                translated = await googleTranslate(m.chunk, targetLang);
+                                verified = false;
+                            }
+                        } catch (e) {
+                            translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
                             verified = false;
                         }
                         addQuranHadithEntry('hadith', {
-                            arabic: chunk,
+                            arabic: m.chunk,
                             source: `${hadithMatch.collection} — حديث رقم ${hadithMatch.idInBook}`,
                             translated,
                             note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — يُرجى المراجعة'
@@ -688,9 +722,9 @@
                     // ملاحظة: الجمل التي "يُحتمل أنها حديث" بلا تطابق دقيق لم تعد تُعرض تلقائيًا هنا،
                     // لتقليل التنبيهات غير الدقيقة عند نشر فقرات كاملة — البحث اليدوي في تاب "القرآن والسنة" يبقى متاحًا دائمًا.
                 } catch (e) {
-                    console.error('Quran/Hadith detection error for chunk:', chunk, e);
+                    console.error('Quran/Hadith entry render error:', e);
                 }
-            }
+            }));
         }
 
         function addQuranHadithEntry(type, entry) {

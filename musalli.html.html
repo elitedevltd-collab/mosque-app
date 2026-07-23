@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوابة المصلّي الرقمية | Mosque App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* الثيم الافتراضي: فاتح بلمسة زرقاء (مطابق للقطة الشاشة المرجعية) */
+            --primary: #2F6FD6;
+            --secondary: #6B8CBE;
+            --accent: #2F6FD6;
+            --light-bg: #EAF1FC;
+            --white: #ffffff;
+            --text-main: #1E2430;
+            --text-secondary: #838B9C;
+            --quran-color: #A15A2E;
+            --hadith-color: #2F6FD6;
+            --gold: #2F6FD6;
+            --page-bg: #F2F5FA;
+            --card-border: #DCE6F5;
+            --card-border-dashed: #BBD3F2;
+            --input-bg: #F5F8FC;
+            --soft-bg: #F5F8FC;
+            --nav-bg: #ffffff;
+            --nav-active-bg: #EAF1FC;
+            --quran-tint: #FBEEE9;
+            --hadith-tint: #EAF1FC;
+            --live-color: #1a9850;
+            --font-display: 'Cairo', system-ui, sans-serif;
+            --translation-scale: 1;
+        }
+        [data-theme="dark"] {
+            --primary: #5B93E8;
+            --secondary: #7B9CC9;
+            --accent: #5B93E8;
+            --light-bg: #0F1626;
+            --white: #141B2E;
+            --text-main: #EDEFF5;
+            --text-secondary: #9BA3C2;
+            --quran-color: #E3A857;
+            --hadith-color: #7BA7D9;
+            --page-bg: #0B0E1A;
+            --card-border: #232C48;
+            --card-border-dashed: #35426B;
+            --input-bg: #1B2338;
+            --soft-bg: #1B2338;
+            --nav-bg: #10141F;
+            --nav-active-bg: #1E2740;
+            --quran-tint: rgba(227,168,87,0.14);
+            --hadith-tint: rgba(91,147,232,0.16);
+            --live-color: #3DDC84;
+        }
+
+        * { box-sizing: border-box; font-family: var(--font-display), system-ui, sans-serif; margin: 0; padding: 0; }
+        body { background-color: var(--page-bg); color: var(--text-main); padding-bottom: 110px; transition: background-color 0.25s ease, color 0.25s ease; }
+
+        /* بطاقة بإطار مزدوج مزخرف (الشكل المرجعي) — تُستخدم لبطاقة المواقيت وبقية بطاقات التطبيق */
+        .masjidi-card {
+            position: relative;
+            background: var(--white);
+            border-radius: 26px;
+            padding: 22px 18px;
+            box-shadow: 0 6px 22px rgba(30,60,110,0.08);
+            border: 1px solid var(--card-border);
+            margin-bottom: 20px;
+        }
+        .masjidi-card::before {
+            content: "";
+            position: absolute; inset: 7px;
+            border: 1.5px dashed var(--card-border-dashed);
+            border-radius: 20px;
+            pointer-events: none;
+        }
+        .masjidi-card > * { position: relative; z-index: 1; }
+        .masjidi-card-title { text-align: center; color: var(--primary); font-size: 17px; font-weight: 800; margin-bottom: 14px; }
+
+        /* شبكة الأدوات */
+        .tools-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .tool-btn { background: var(--light-bg); border-radius: 16px; padding: 18px 10px; text-align: center; cursor: pointer; transition: transform 0.15s ease; }
+        .tool-btn:active { transform: scale(0.97); }
+        .tool-icon { display: block; font-size: 26px; margin-bottom: 8px; }
+        .tool-name { display: block; font-size: 15px; font-weight: 800; color: var(--text-main); margin-bottom: 3px; }
+        .tool-desc { display: block; font-size: 11px; color: var(--text-secondary); }
+
+        /* القبلة */
+        .qibla-result { padding: 10px 0; }
+        .qibla-degree { font-size: 40px; font-weight: 800; color: var(--primary); direction: ltr; }
+        .qibla-compass { width: 140px; height: 140px; margin: 14px auto; position: relative; }
+        .qibla-arrow { transition: transform 0.4s ease; }
+        .qibla-note { font-size: 12px; color: var(--text-secondary); line-height: 1.8; margin-top: 10px; }
+
+        /* الأذكار */
+        .adhkar-sub-title { font-size: 14px; font-weight: 800; color: var(--primary); margin: 14px 0 8px; }
+        .adhkar-sub-title:first-of-type { margin-top: 0; }
+        .adhkar-item { background: var(--soft-bg); border-radius: 12px; padding: 12px; margin-bottom: 8px; font-size: 14px; line-height: 2; text-align: center; color: var(--text-main); }
+
+        /* العمرة */
+        .umrah-step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px dashed var(--card-border); font-size: 13px; line-height: 1.8; color: var(--text-main); }
+        .umrah-step:last-child { border-bottom: none; }
+        .umrah-num { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+
+        /* الصيام */
+        .fasting-row { display: flex; align-items: center; justify-content: space-between; background: var(--soft-bg); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+        .fasting-row .fname { font-weight: 700; font-size: 14px; color: var(--text-main); }
+        .fasting-row .fdate { font-size: 12px; color: var(--text-secondary); direction: ltr; }
+
+        /* التقويم — بطاقة الحدث */
+        .event-card { display: flex; align-items: center; gap: 12px; background: var(--soft-bg); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+        .event-badge { flex-shrink: 0; width: 54px; height: 54px; border-radius: 14px; background: var(--light-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .event-badge .num { font-size: 17px; font-weight: 800; color: var(--primary); line-height: 1; }
+        .event-badge .lbl { font-size: 9px; color: var(--text-secondary); }
+        .event-info .ename { font-weight: 800; font-size: 14px; color: var(--text-main); }
+        .event-info .edate { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+        .city-select { width: 100%; padding: 9px; margin-bottom: 14px; border-radius: 10px; border: 1px solid var(--card-border-dashed); background: var(--light-bg); color: var(--primary); font-weight: 700; font-size: 13px; text-align: center; outline: none; }
+
+        /* قائمة المواقيت العمودية */
+        .prayer-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+        .prayer-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 4px; }
+        .prayer-row.is-next { background: var(--light-bg); border-radius: 10px; padding-left: 10px; padding-right: 10px; }
+        .p-icon { color: var(--primary); font-size: 15px; width: 26px; text-align: center; }
+        .p-name { flex: 1; text-align: right; font-size: 15px; font-weight: 700; color: var(--text-main); margin-right: 8px; }
+        .p-time { font-size: 18px; font-weight: 800; color: var(--text-main); direction: ltr; }
+
+        /* شريط العد التنازلي للصلاة القادمة */
+        .next-prayer-ribbon {
+            background: linear-gradient(90deg, var(--primary), #4C86E0);
+            color: #fff; border-radius: 999px; padding: 12px 22px;
+            display: flex; align-items: center; justify-content: space-between;
+            font-weight: 800; font-size: 17px; margin: 4px 0 16px;
+            box-shadow: 0 4px 14px rgba(47,111,214,0.3);
+        }
+        #next-prayer-countdown { direction: ltr; font-variant-numeric: tabular-nums; }
+
+        /* حديث اليوم */
+        .hadith-of-day { text-align: center; padding: 4px 6px 14px; border-bottom: 1px dashed var(--card-border-dashed); margin-bottom: 12px; }
+        .hod-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 700; }
+        .hod-text { font-size: 14px; line-height: 1.9; color: var(--text-main); font-weight: 600; margin-bottom: 6px; }
+        .hod-source { font-size: 11px; color: var(--text-secondary); }
+
+        /* شريط الوقت والتاريخ أسفل البطاقة */
+        .masjidi-footer { display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .mf-time { font-size: 20px; font-weight: 800; color: var(--primary); direction: ltr; }
+        .mf-date { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+
+        header {
+            position: relative; overflow: hidden;
+            background: linear-gradient(135deg, var(--primary), #4C86E0);
+            color: #ffffff; padding: 30px 20px 26px;
+            text-align: center; border-bottom-left-radius: 28px; border-bottom-right-radius: 28px;
+            box-shadow: 0 6px 20px rgba(47,111,214,0.25);
+        }
+        header::before {
+            content: ""; position: absolute; inset: 0; opacity: 0.5; pointer-events: none;
+            background-image: repeating-conic-gradient(from 0deg at 50% 120%, transparent 0deg 44deg, rgba(255,255,255,0.08) 44deg 46deg);
+            background-size: 60px 60px;
+        }
+        header > * { position: relative; z-index: 1; }
+        header h1 { font-size: 21px; font-weight: 800; margin-bottom: 5px; letter-spacing: 0.3px; }
+        header p { font-size: 13px; opacity: 0.85; font-weight: 600; }
+        
+        .container { max-width: 550px; margin: -20px auto 0 auto; padding: 0 15px; }
+        
+        /* مواقيت الصلاة */
+        /* (تصميم مواقيت الصلاة القديم استُبدل ببطاقة masjidi-card الجديدة أدناه) */
+
+        /* التحكم في الصفحات */
+        .app-page { display: none; }
+        .app-page.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+
+        /* الكروت القابلة للقراءة */
+        .info-card { background: var(--white); border: 1px solid var(--card-border); padding: 15px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.18); margin-bottom: 15px; }
+        .quran-card { border-right: 5px solid var(--quran-color); margin-top: 20px; }
+        .hadith-card { border-right: 5px solid var(--hadith-color); }
+        .info-card h3 { font-size: 13px; margin-bottom: 5px; }
+        .quran-card h3 { color: var(--quran-color); }
+        .hadith-card h3 { color: var(--hadith-color); }
+        .info-card .content { font-size: 15px; line-height: 1.7; color: var(--text-main); text-align: center; font-weight: bold; padding: 5px 0; }
+        .info-card .source-tag { font-size: 11px; color: var(--text-secondary); text-align: left; display: block; margin-top: 5px; font-weight: bold; }
+
+        /* واجهة الترجمة الفورية */
+        .main-card { position: relative; background: var(--white); padding: 22px 18px; border-radius: 26px; box-shadow: 0 6px 22px rgba(30,60,110,0.08); border: 1px solid var(--card-border); margin-top: 20px; margin-bottom: 20px; transition: background-color 0.25s ease, border-color 0.25s ease; }
+        .main-card::before { content: ""; position: absolute; inset: 7px; border: 1.5px dashed var(--card-border-dashed); border-radius: 20px; pointer-events: none; }
+        .main-card > * { position: relative; z-index: 1; }
+        .section-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; color: var(--primary); }
+        select { width: 100%; padding: 12px; font-size: 14px; border-radius: 10px; border: 1px solid #ced4da; background-color: var(--input-bg); color: var(--text-main); font-weight: bold; margin-bottom: 15px; outline: none; }
+        
+        .translation-display { 
+            background: var(--soft-bg); 
+            padding: 18px; 
+            border-radius: 12px; 
+            min-height: 150px; 
+            font-size: calc(18px * var(--translation-scale)); 
+            line-height: 1.8; 
+            color: var(--text-main); 
+            border: 1px solid var(--card-border); 
+            margin-bottom: 15px; 
+            font-weight: 500;
+            transition: font-size 0.15s ease, background-color 0.25s ease;
+        }
+        
+        .display-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .font-ctrl { display: flex; align-items: center; gap: 6px; }
+        .ctrl-label { font-size: 12px; color: var(--text-secondary); margin-left: 4px; }
+        .ctrl-btn { background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; width: 32px; height: 32px; font-size: 13px; font-weight: bold; cursor: pointer; }
+        .ctrl-btn:active { transform: scale(0.94); }
+        .theme-toggle { background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 20px; padding: 7px 14px; font-size: 13px; font-weight: bold; cursor: pointer; }
+        .theme-toggle:active { transform: scale(0.97); }
+
+        .action-bar { display: flex; justify-content: space-between; align-items: center; }
+        .btn-listen { background: linear-gradient(180deg, var(--secondary), var(--primary)); color: #ffffff; border: none; padding: 10px 20px; border-radius: 20px; font-weight: 700; font-size: 14px; cursor: pointer; }
+        .live-status { font-size: 12px; color: var(--live-color); display: flex; align-items: center; gap: 6px; font-weight: bold; }
+        .pulse { width: 8px; height: 8px; background: var(--live-color); border-radius: 50%; animation: blink 1.8s infinite; }
+        .ltr { direction: ltr; text-align: left; }
+        .rtl { direction: rtl; text-align: right; }
+
+        #translation-badge { margin-bottom: 8px; min-height: 22px; }
+        .badge { display:inline-block; font-size:12px; font-weight:bold; padding:5px 12px; border-radius:14px; }
+        .badge.quran { background:var(--quran-tint); color:var(--quran-color); border:1px solid var(--quran-color); }
+        .badge.hadith { background:var(--hadith-tint); color:var(--hadith-color); border:1px solid var(--hadith-color); }
+        .badge.hadith.unverified { opacity: 0.85; }
+
+        #quran-hadith-log { display:flex; flex-direction:column; gap:12px; max-height:420px; overflow-y:auto; }
+        .qh-empty { text-align:center; color:var(--text-secondary); font-size:13px; padding:15px 0; }
+        .qh-item { background:var(--soft-bg); border-radius:12px; padding:14px; border-right:4px solid var(--quran-color); animation: fadeIn 0.3s ease-in-out; }
+        .qh-item.hadith { border-right-color: var(--hadith-color); }
+        .qh-badge { font-size:12px; font-weight:bold; margin-bottom:8px; color:var(--quran-color); }
+        .qh-item.hadith .qh-badge { color: var(--hadith-color); }
+        .qh-arabic { font-size:calc(15px * var(--translation-scale)); line-height:1.8; text-align:center; color:var(--text-main); font-weight:600; margin-bottom:8px; }
+        .qh-translation { font-size:calc(14px * var(--translation-scale)); line-height:1.6; color:var(--text-secondary); text-align:center; background:var(--white); border-radius:8px; padding:8px; }
+        .qh-note { font-size:11px; color:var(--text-secondary); text-align:center; margin-top:6px; }
+
+        /* صناديق البحث */
+        .search-section { position: relative; background: var(--white); padding: 22px 18px; border-radius: 26px; box-shadow: 0 6px 22px rgba(30,60,110,0.08); margin-bottom: 20px; border: 1px solid var(--card-border); }
+        .search-section::before { content: ""; position: absolute; inset: 7px; border: 1.5px dashed var(--card-border-dashed); border-radius: 20px; pointer-events: none; }
+        .search-section > * { position: relative; z-index: 1; }
+        .search-section h3 { font-size: 14px; color: var(--primary); margin-bottom: 12px; }
+        .search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .search-row input { flex: 1; padding: 12px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text-main); border-radius: 10px; font-size: 14px; outline: none; }
+        .search-row button { border: none; padding: 0 20px; border-radius: 10px; font-size: 14px; cursor: pointer; font-weight: bold; color: #ffffff; transition: opacity 0.2s; }
+        .search-row button:hover { opacity: 0.8; }
+        
+        .quran-btn { background: var(--quran-color); }
+        .hadith-btn { background: var(--hadith-color); }
+
+        /* نتائج البحث */
+        .search-result-box { display: none; background: var(--soft-bg); color: var(--text-main); padding: 14px; border-radius: 10px; font-size: 14px; line-height: 1.8; border-top: 3px solid var(--gold); margin-top: 8px; max-height: 500px; overflow-y: auto; }
+        .search-result-box.active { display: block; }
+        .result-count { font-size: 12px; color: var(--live-color); margin-bottom: 12px; text-align: center; font-weight: bold; background: var(--quran-tint); padding: 8px; border-radius: 6px; }
+        
+        /* عنصر النتيجة الواحدة */
+        .result-item { background: var(--white); color: var(--text-main); padding: 12px; border-radius: 8px; margin-bottom: 10px; border-right: 3px solid var(--gold); box-shadow: 0 2px 5px rgba(0,0,0,0.12); }
+        .result-item:last-child { margin-bottom: 0; }
+        .result-item .result-text { font-size: 15px; line-height: 1.7; color: var(--text-main); margin-bottom: 8px; text-align: center; font-weight: 500; }
+        .result-item .result-source { font-size: 11px; color: var(--text-secondary); text-align: left; font-weight: bold; }
+
+        /* مؤشر التحميل */
+        .loading-spinner { display: none; text-align: center; padding: 15px; }
+        .loading-spinner.active { display: block; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* شريط التنقل السفلي — عائم بيضاوي */
+        .bottom-nav {
+            position: fixed;
+            bottom: 18px;
+            left: 18px;
+            right: 18px;
+            background-color: var(--nav-bg);
+            height: 64px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 10px 28px rgba(30,60,110,0.18);
+            border-radius: 999px;
+            border: 1px solid var(--card-border);
+            z-index: 9999;
+            padding: 0 10px;
+            max-width: 420px;
+            margin: 0 auto;
+        }
+        .nav-item {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            height: 48px;
+            border-radius: 999px;
+            gap: 2px;
+            transition: all 0.2s ease;
+        }
+        .nav-item .icon { font-size: 19px; line-height: 1; }
+        .nav-item.active { color: var(--primary); background-color: var(--nav-active-bg); }
+
+        @keyframes blink { 50% { opacity: 0.3; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes flashUpdate { 0% { background-color: rgba(212,175,55,0.25); } 100% { background-color: transparent; } }
+        .translation-display.flash { animation: flashUpdate 0.7s ease-out; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1 id="app-main-title">بوابة المسجد الرقمية</h1>
+        <p id="app-sub-title">مرحباً بك في بيت الله • Welcome to the Mosque</p>
+    </header>
+
+    <div class="container">
+        <div id="tab-home" class="app-page active">
+            <div class="main-card">
+                <div class="section-title">🌍 ترجمة الخطبة المباشرة | Live Translation</div>
+                <select id="lang-select" onchange="changeLanguage()">
+                    <option value="en" data-rtl="false">English (الإنجليزية)</option>
+                    <option value="ur" data-rtl="true">اردو (الأوردو)</option>
+                    <option value="tr" data-rtl="false">Türkçe (التركية)</option>
+                    <option value="bn" data-rtl="false">বাংলা (البنغالية)</option>
+                    <option value="id" data-rtl="false">Bahasa Indonesia (الإندونيسية)</option>
+                </select>
+
+                <div class="display-controls">
+                    <div class="font-ctrl">
+                        <span class="ctrl-label">حجم الخط</span>
+                        <button class="ctrl-btn" onclick="changeFontScale(-1)" aria-label="تصغير">A-</button>
+                        <button class="ctrl-btn" onclick="changeFontScale(1)" aria-label="تكبير">A+</button>
+                    </div>
+                    <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()">🌙 وضع ليلي</button>
+                </div>
+                
+                <div id="translation-output" class="translation-display ltr">Waiting for the speech to begin...</div>
+                
+                <div class="action-bar">
+                    <div class="live-status"><div class="pulse"></div><span>البث المباشر متصل فوريًا</span></div>
+                    <button class="btn-listen" onclick="speak()">🔊 استمع / Listen</button>
+                </div>
+                <div id="fb-status" style="text-align:center; font-size:11px; color:#999; margin-top:8px;">جارٍ التحقق من الاتصال...</div>
+            </div>
+
+            <div class="main-card" id="qh-card">
+                <div class="section-title">📖 آيات وأحاديث ذُكرت في الخطبة</div>
+                <div id="db-status" style="text-align:center; font-size:12px; margin-bottom:10px; display:none;"></div>
+                <div id="quran-hadith-log">
+                    <div class="qh-empty" id="qh-empty">لم تُذكر آية قرآنية أو حديث نبوي حتى الآن...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-knowledge" class="app-page">
+            <div class="info-card quran-card">
+                <h3>📖 آية وتدبّر اليوم (أونلاين)</h3>
+                <div class="content" id="quran-text">«إِنَّ مَعَ الْعُسْرِ يُسْرًا»</div>
+                <span class="source-tag" id="quran-source">سورة الشرح - الآية 6</span>
+            </div>
+            
+            <div class="info-card hadith-card">
+                <h3>✨ من السُنّة المطهرة (أونلاين)</h3>
+                <div class="content" id="hadith-text">قال ﷺ: «مَنْ سَلَكَ طَرِيقًا يَلْتَمِسُ فِيهِ عِلْمًا سَهَّلَ اللَّهُ لَهُ بِهِ طَرِيقًا إِلَى الْجَنَّةِ»</div>
+                <span class="source-tag" id="hadith-source">رواه مسلم</span>
+            </div>
+
+            <div class="search-section" style="border-top: 3px solid var(--quran-color);">
+                <h3>🔍 المكتبة القرآنية الشاملة (بحث دقيق بالآيات والكلمات)</h3>
+                <div class="search-row">
+                    <input type="text" id="quran-search-input" placeholder="اكتب كلمة أو آية (مثال: أزواجكم، العسر، الصلاة)...">
+                    <button onclick="searchQuranLibrary()" class="quran-btn">بحث</button>
+                </div>
+                <div id="quran-loading" class="loading-spinner"><div class="spinner"></div></div>
+                <div id="quran-search-result" class="search-result-box" style="border-top-color: var(--quran-color);"></div>
+            </div>
+
+            <div class="search-section" style="border-top: 3px solid var(--hadith-color);">
+                <h3>🔍 موسوعة الحديث النبوي الشريف (البحث في كتب السنة)</h3>
+                <div class="search-row">
+                    <input type="text" id="hadith-search-input" placeholder="اكتب جملة من الحديث (مثال: النيات، طهور، صيام)...">
+                    <button onclick="searchHadithLibrary()" class="hadith-btn">بحث</button>
+                </div>
+                <div id="hadith-loading" class="loading-spinner"><div class="spinner"></div></div>
+                <div id="hadith-search-result" class="search-result-box" style="border-top-color: var(--hadith-color);"></div>
+            </div>
+        </div>
+
+        <div id="tab-tools" class="app-page">
+            <div class="masjidi-card">
+                <div class="masjidi-card-title">🧭 أدوات</div>
+                <div class="tools-grid">
+                    <div class="tool-btn" onclick="toggleTool('qibla')">
+                        <span class="tool-icon">🧭</span><span class="tool-name">القبلة</span><span class="tool-desc">الاتجاه إلى الكعبة</span>
+                    </div>
+                    <div class="tool-btn" onclick="toggleTool('adhkar')">
+                        <span class="tool-icon">📿</span><span class="tool-name">الأذكار</span><span class="tool-desc">أذكار وأدعية يومية</span>
+                    </div>
+                    <div class="tool-btn" onclick="toggleTool('umrah')">
+                        <span class="tool-icon">🕋</span><span class="tool-name">العمرة</span><span class="tool-desc">قائمة أعمال النسك</span>
+                    </div>
+                    <div class="tool-btn" onclick="toggleTool('fasting')">
+                        <span class="tool-icon">🌙</span><span class="tool-name">الصيام</span><span class="tool-desc">أيام الصيام القادمة</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="masjidi-card tool-panel" id="tool-qibla" style="display:none;">
+                <div class="masjidi-card-title">🧭 اتجاه القبلة</div>
+                <div id="qibla-content" style="text-align:center;">
+                    <button class="btn-listen" style="width:100%;" onclick="computeQibla()">📍 احسب اتجاه القبلة من موقعي</button>
+                </div>
+            </div>
+
+            <div class="masjidi-card tool-panel" id="tool-adhkar" style="display:none;">
+                <div class="masjidi-card-title">📿 الأذكار</div>
+                <div class="adhkar-sub-title">أذكار الصباح</div>
+                <div class="adhkar-item">سُبْحَانَ اللَّهِ وَبِحَمْدِهِ عَدَدَ خَلْقِهِ، وَرِضَا نَفْسِهِ، وَزِنَةَ عَرْشِهِ، وَمِدَادَ كَلِمَاتِهِ (×3)</div>
+                <div class="adhkar-item">اللَّهُمَّ بِكَ أَصْبَحْنَا، وَبِكَ أَمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ النُّشُورُ</div>
+                <div class="adhkar-item">أَصْبَحْنَا عَلَى فِطْرَةِ الْإِسْلَامِ، وَعَلَى كَلِمَةِ الْإِخْلَاصِ، وَعَلَى دِينِ نَبِيِّنَا مُحَمَّدٍ ﷺ</div>
+                <div class="adhkar-sub-title">أذكار المساء</div>
+                <div class="adhkar-item">اللَّهُمَّ بِكَ أَمْسَيْنَا، وَبِكَ أَصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ الْمَصِيرُ</div>
+                <div class="adhkar-item">أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ</div>
+                <div class="adhkar-item">أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ (×3)</div>
+            </div>
+
+            <div class="masjidi-card tool-panel" id="tool-umrah" style="display:none;">
+                <div class="masjidi-card-title">🕋 قائمة أعمال العمرة</div>
+                <div class="umrah-step"><span class="umrah-num">1</span><div><b>الإحرام</b><br>الاغتسال، ولبس ملابس الإحرام، والنية، والتلبية من الميقات</div></div>
+                <div class="umrah-step"><span class="umrah-num">2</span><div><b>الطواف</b><br>سبعة أشواط حول الكعبة المشرفة، تبدأ وتنتهي عند الحجر الأسود</div></div>
+                <div class="umrah-step"><span class="umrah-num">3</span><div><b>الصلاة خلف مقام إبراهيم</b><br>ركعتان بعد الطواف إن أمكن، وإلا في أي مكان بالمسجد</div></div>
+                <div class="umrah-step"><span class="umrah-num">4</span><div><b>السعي</b><br>سبعة أشواط بين الصفا والمروة</div></div>
+                <div class="umrah-step"><span class="umrah-num">5</span><div><b>الحلق أو التقصير</b><br>حلق الرأس كاملاً أو تقصير الشعر — وبه تتم العمرة</div></div>
+            </div>
+
+            <div class="masjidi-card tool-panel" id="tool-fasting" style="display:none;">
+                <div class="masjidi-card-title">🌙 أيام الصيام القادمة</div>
+                <div id="fasting-content">جارٍ الحساب...</div>
+            </div>
+        </div>
+
+        <div id="tab-calendar" class="app-page">
+            <div class="masjidi-card" style="margin-top: 25px;">
+                <div class="masjidi-card-title">مواقيت الصلاة</div>
+                <select id="city-select" class="city-select" onchange="onCityChange()"></select>
+                <div class="prayer-list" id="prayer-list">
+                    <div class="prayer-row" data-prayer="Fajr"><span class="p-icon">☾</span><span class="p-name">الفجر</span><span class="p-time">--:--</span></div>
+                    <div class="prayer-row" data-prayer="Sunrise"><span class="p-icon">◒</span><span class="p-name">الشروق</span><span class="p-time">--:--</span></div>
+                    <div class="prayer-row" data-prayer="Dhuhr"><span class="p-icon">☀</span><span class="p-name">الظهر</span><span class="p-time">--:--</span></div>
+                    <div class="prayer-row" data-prayer="Asr"><span class="p-icon">☀</span><span class="p-name">العصر</span><span class="p-time">--:--</span></div>
+                    <div class="prayer-row" data-prayer="Maghrib"><span class="p-icon">◑</span><span class="p-name">المغرب</span><span class="p-time">--:--</span></div>
+                    <div class="prayer-row" data-prayer="Isha"><span class="p-icon">☾</span><span class="p-name">العشاء</span><span class="p-time">--:--</span></div>
+                </div>
+
+                <div class="next-prayer-ribbon" id="next-prayer-ribbon">
+                    <span id="next-prayer-name">—</span>
+                    <span id="next-prayer-countdown">--:--</span>
+                </div>
+
+                <div class="hadith-of-day" id="hadith-of-day" style="display:none;">
+                    <div class="hod-label">قال النبي ﷺ:</div>
+                    <div class="hod-text" id="hod-text"></div>
+                    <div class="hod-source" id="hod-source"></div>
+                </div>
+
+                <div class="masjidi-footer">
+                    <span class="mf-time" id="mf-clock">--:--</span>
+                    <span class="mf-date" id="mf-date">—</span>
+                </div>
+
+                <div id="prayer-status" style="text-align:center; font-size:11px; color:var(--text-secondary); margin-top:8px;"></div>
+            </div>
+
+            <div class="masjidi-card">
+                <div class="masjidi-card-title">📅 الأحداث الإسلامية القادمة</div>
+                <div id="events-content">جارٍ التحميل...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active" id="nav-home" onclick="navigateTo('home')">
+            <span class="icon">🕌</span>
+            <span>الرئيسية</span>
+        </div>
+        <div class="nav-item" id="nav-knowledge" onclick="navigateTo('knowledge')">
+            <span class="icon">📖</span>
+            <span>القرآن والسنة</span>
+        </div>
+        <div class="nav-item" id="nav-tools" onclick="navigateTo('tools')">
+            <span class="icon">🧭</span>
+            <span>أدوات</span>
+        </div>
+        <div class="nav-item" id="nav-calendar" onclick="navigateTo('calendar')">
+            <span class="icon">📅</span>
+            <span>التقويم</span>
+        </div>
+    </div>
+
+    <script>
+        /* ============================================================
+           ⚙️ إعدادات Firebase — يجب أن تكون مطابقة تمامًا لنفس القيم
+           الموجودة في ملف imam.html حتى يعمل الربط بين الواجهتين
+           ============================================================ */
+        const FIREBASE_CONFIG = {
+            databaseURL: "https://mosqa-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+            sermonPath: "sermon"
+        };
+
+        /* ============================================================
+           ⚙️ خدمة الترجمة الموثوقة (اختياري لكن يُنصح به بشدة)
+           اتركه فارغًا "" ليعمل التطبيق بخدمات الترجمة المجانية الاحتياطية فقط.
+           أو ضع رابط Cloudflare Worker بعد إعداده حسب worker/README_WORKER.md
+           ============================================================ */
+        const TRANSLATE_WORKER_URL = ""; // مثال: "https://mosque-translate.username.workers.dev"
+
+        /* ============================================================
+           🕌 مواقيت الصلاة — المصلي يختار مدينة مسجده من القائمة، ويُحفظ اختياره
+           على هذا الجهاز تلقائيًا. طريقة الحساب: 4 = أم القرى (مكة المكرمة)
+           ============================================================ */
+        const SAUDI_CITIES = [
+            { ar: 'الرياض', en: 'Riyadh' }, { ar: 'جدة', en: 'Jeddah' },
+            { ar: 'مكة المكرمة', en: 'Makkah' }, { ar: 'المدينة المنورة', en: 'Madinah' },
+            { ar: 'الدمام', en: 'Dammam' }, { ar: 'الخبر', en: 'Khobar' },
+            { ar: 'الطائف', en: 'Taif' }, { ar: 'أبها', en: 'Abha' },
+            { ar: 'تبوك', en: 'Tabuk' }, { ar: 'بريدة', en: 'Buraydah' },
+            { ar: 'حائل', en: 'Hail' }, { ar: 'نجران', en: 'Najran' },
+            { ar: 'الجبيل', en: 'Jubail' }, { ar: 'ينبع', en: 'Yanbu' },
+            { ar: 'خميس مشيط', en: 'Khamis Mushait' }
+        ];
+        const PRAYER_CONFIG = {
+            city: "Riyadh",
+            country: "Saudi Arabia",
+            method: 4 // أم القرى (مكة المكرمة)
+        };
+
+        function initCitySelect() {
+            const select = document.getElementById('city-select');
+            if (!select) return;
+            SAUDI_CITIES.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.en;
+                opt.textContent = c.ar;
+                select.appendChild(opt);
+            });
+            let saved = 'Riyadh';
+            try { saved = localStorage.getItem('mosque-app-city') || 'Riyadh'; } catch (e) {}
+            select.value = saved;
+            PRAYER_CONFIG.city = saved;
+        }
+
+        function onCityChange() {
+            const select = document.getElementById('city-select');
+            if (!select) return;
+            PRAYER_CONFIG.city = select.value;
+            try { localStorage.setItem('mosque-app-city', select.value); } catch (e) {}
+            loadPrayerTimes();
+        }
+
+        // ===== تفضيلات العرض (وضع ليلي + حجم الخط) — تُحفظ محليًا على هذا الجهاز =====
+        const FIREBASE_DB_URL = `${FIREBASE_CONFIG.databaseURL}/${FIREBASE_CONFIG.sermonPath}.json`;
+        let lastTimestamp = 0; 
+        let lastText = "";
+
+        const FONT_SCALE_STEPS = [0.85, 1, 1.15, 1.3, 1.5];
+        let fontScaleIndex = 1;
+
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            const btn = document.getElementById('theme-toggle-btn');
+            if (btn) btn.textContent = theme === 'dark' ? '☀️ وضع نهاري' : '🌙 وضع ليلي';
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            const next = current === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+            try { localStorage.setItem('mosque-app-theme', next); } catch (e) {}
+        }
+
+        function applyFontScale() {
+            const scale = FONT_SCALE_STEPS[fontScaleIndex];
+            document.documentElement.style.setProperty('--translation-scale', scale);
+        }
+
+        function changeFontScale(direction) {
+            const newIndex = fontScaleIndex + direction;
+            if (newIndex < 0 || newIndex >= FONT_SCALE_STEPS.length) return;
+            fontScaleIndex = newIndex;
+            applyFontScale();
+            try { localStorage.setItem('mosque-app-font-index', String(fontScaleIndex)); } catch (e) {}
+        }
+
+        function loadDisplayPreferences() {
+            try {
+                const savedTheme = localStorage.getItem('mosque-app-theme');
+                applyTheme(savedTheme === 'dark' ? 'dark' : 'light');
+
+                const savedFontIndex = parseInt(localStorage.getItem('mosque-app-font-index'), 10);
+                if (!isNaN(savedFontIndex) && savedFontIndex >= 0 && savedFontIndex < FONT_SCALE_STEPS.length) {
+                    fontScaleIndex = savedFontIndex;
+                }
+                applyFontScale();
+            } catch (e) {
+                applyTheme('light');
+                applyFontScale();
+            }
+        }
+
+        // ===== قاعدة بيانات القرآن والحديث المحلية (بدون أي API خارجي) =====
+        let quranVerses = [];
+        let quranSurahs = {};
+        let hadithEntries = [];
+        let quranBigramIndex = null;
+        let hadithBigramIndex = null;
+        let versesBySurahAyah = null;
+        let localDbReady = false;
+
+        // ===== محرك الكشف الجديد: مطابقة على مستوى الكلمات مع سماحية أخطاء التعرف الصوتي =====
+        // إزالة التشكيل وتوحيد صور الحروف حتى يتطابق النص المسموع (إملائي بلا تشكيل) مع نص المصحف (رسم عثماني كامل التشكيل)
+        function normalizeArabic(text) {
+            return (text || '')
+                .replace(/[\u06D6-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g, '') // علامات الوقف القرآنية والرموز العلوية الخاصة
+                .replace(/([\u0649\u064A])\u0670/g, '$1') // الألف الخنجرية بعد ى/ي تُحذف (تولّىٰ → تولى)
+                .replace(/\u0670/g, 'ا') // الألف الخنجرية الوسطية تُنطق ألفًا (للإنسٰن → للانسان، خٰلدين → خالدين)
+                .replace(/الرحمان/g, 'الرحمن').replace(/الاه/g, 'اله') // مرادفات إملائية: التعرف الصوتي يكتبها بلا ألف وسطية
+                .replace(/[\u064B-\u065F\u0610-\u061A]/g, '') // بقية علامات التشكيل
+                .replace(/\u0640/g, '') // التطويل
+                .replace(/[،؛؟.!«»"'()\[\]{}:۔–—\-\u200f\u200e\u202a-\u202e﴾﴿۞]/g, ' ') // علامات الترقيم ومحارف الاتجاه الخفية
+                .replace(/\u0621/g, 'ا') // الهمزة على السطر: أَفَرَءَيۡتَ → افرايت، ءامنوا → اامنوا (تُدمج لاحقًا)
+                .replace(/[إأآاٱ]/g, 'ا') // توحيد كل صور الألف (بما فيها ألف الوصل ٱ)
+                .replace(/ى/g, 'ي')
+                .replace(/ة/g, 'ه')
+                .replace(/ؤ/g, 'و')
+                .replace(/ئ/g, 'ي')
+                .replace(/اا+/g, 'ا') // ألفان متتاليتان نتجتا عن التطبيع → واحدة
+                .replace(/يا\s+اي/g, 'يااي') // نداء "يا أيها" موصولة/مفصولة
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // تقسيم النص المطبّع لكلمات (نتجاهل كلمات الحرف الواحد)
+        function tokenizeWords(normText) {
+            return normText.split(' ').filter(function(w) { return w.length >= 2; });
+        }
+
+        // فهرس عكسي: كل كلمتين متتاليتين (bigram) ← قائمة الآيات/الأحاديث التي تحتويهما — يجعل الكشف فوريًا (مللي ثوانٍ)
+        function buildBigramIndex(entries) {
+            const index = new Map();
+            entries.forEach(function(e, idx) {
+                const words = e.words;
+                for (let i = 0; i < words.length - 1; i++) {
+                    const bg = words[i] + ' ' + words[i + 1];
+                    let list = index.get(bg);
+                    if (!list) { list = []; index.set(bg, list); }
+                    if (list[list.length - 1] !== idx) list.push(idx);
+                }
+            });
+            return index;
+        }
+
+        async function loadLocalDatabases() {
+            const statusEl = document.getElementById('db-status');
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '⏳ جارٍ تحميل قاعدة بيانات القرآن والحديث محليًا (~24 ميجابايت، مرة واحدة فقط)...'; statusEl.style.color = '#999'; }
+            try {
+                const [qRes, hRes] = await Promise.all([
+                    fetch('./quran-data.json'),
+                    fetch('./hadith-data.json')
+                ]);
+                const qData = await qRes.json();
+                const hData = await hRes.json();
+
+                quranSurahs = qData.surahs;
+                quranVerses = qData.verses.map(v => { const norm = normalizeArabic(v.ar); return { ...v, norm, words: tokenizeWords(norm) }; });
+                hadithEntries = hData.map(h => { const norm = normalizeArabic(h.a); return { ...h, norm, words: tokenizeWords(norm) }; });
+                quranBigramIndex = buildBigramIndex(quranVerses);
+                hadithBigramIndex = buildBigramIndex(hadithEntries);
+                versesBySurahAyah = new Map(quranVerses.map(v => [v.s + ':' + v.a, v]));
+
+                localDbReady = true;
+                showVerseOfTheDay();
+                showHadithOfDay();
+                if (statusEl) {
+                    statusEl.textContent = '✅ قاعدة القرآن والحديث جاهزة محليًا — بحث بدون إنترنت';
+                    statusEl.style.color = '#28a745';
+                    setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
+                }
+            } catch (e) {
+                console.error('Local DB load failed', e);
+                if (statusEl) {
+                    statusEl.textContent = '⚠️ تعذّر تحميل قاعدة البيانات المحلية — تأكد أن ملفي quran-data.json و hadith-data.json بجانب هذا الملف';
+                    statusEl.style.color = '#d32f2f';
+                }
+            }
+        }
+
+        async function checkFirebaseConnection() {
+            const statusEl = document.getElementById('fb-status');
+            if (!statusEl) return;
+            if (FIREBASE_CONFIG.databaseURL.includes('YOUR-PROJECT-ID')) {
+                statusEl.textContent = '⚠️ لم يتم ربط Firebase بعد';
+                statusEl.style.color = '#d32f2f';
+                return;
+            }
+            try {
+                const res = await fetch(FIREBASE_DB_URL);
+                statusEl.textContent = res.ok ? '✅ متصل' : '⚠️ تعذّر الاتصال';
+                statusEl.style.color = res.ok ? '#28a745' : '#d32f2f';
+            } catch (e) {
+                statusEl.textContent = '⚠️ تعذّر الاتصال';
+                statusEl.style.color = '#d32f2f';
+            }
+        }
+
+        async function checkFirebaseConnection() {
+            const statusEl = document.getElementById('fb-status');
+            if (!statusEl) return;
+            if (FIREBASE_CONFIG.databaseURL.includes('YOUR-PROJECT-ID')) {
+                statusEl.textContent = '⚠️ لم يتم ربط Firebase بعد';
+                statusEl.style.color = '#d32f2f';
+                return;
+            }
+            try {
+                const res = await fetch(FIREBASE_DB_URL);
+                statusEl.textContent = res.ok ? '✅ متصل' : '⚠️ تعذّر الاتصال';
+                statusEl.style.color = res.ok ? '#28a745' : '#d32f2f';
+            } catch (e) {
+                statusEl.textContent = '⚠️ تعذّر الاتصال';
+                statusEl.style.color = '#d32f2f';
+            }
+        }
+
+        // ===== مواقيت الصلاة (Aladhan API) + عد تنازلي حي + الساعة والتاريخ =====
+        const PRAYER_ORDER = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+        const PRAYER_LABELS_AR = { Fajr: 'الفجر', Sunrise: 'الشروق', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء' };
+        let todaysTimings = null;
+
+        function parseTimeToday(hhmm) {
+            const [h, m] = hhmm.split(':').map(Number);
+            const d = new Date();
+            d.setHours(h, m, 0, 0);
+            return d;
+        }
+
+        async function loadPrayerTimes() {
+            const statusEl = document.getElementById('prayer-status');
+            try {
+                const url = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(PRAYER_CONFIG.city)}&country=${encodeURIComponent(PRAYER_CONFIG.country)}&method=${PRAYER_CONFIG.method}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.code !== 200) throw new Error('bad response');
+
+                todaysTimings = data.data.timings;
+                PRAYER_ORDER.forEach(key => {
+                    const row = document.querySelector(`.prayer-row[data-prayer="${key}"] .p-time`);
+                    if (row) row.textContent = (todaysTimings[key] || '--:--').split(' ')[0];
+                });
+
+                const h = data.data.date.hijri;
+                const g = data.data.date.gregorian;
+                const hijriEl = document.getElementById('mf-date');
+                if (hijriEl) hijriEl.textContent = `${g.weekday.ar} ${g.day} ${g.month.ar} ${g.year}`;
+
+                if (statusEl) statusEl.textContent = '';
+                updateNextPrayer();
+            } catch (e) {
+                if (statusEl) statusEl.textContent = '⚠️ تعذّر جلب مواقيت الصلاة — تحقق من الاتصال بالإنترنت';
+            }
+        }
+
+        function updateNextPrayer() {
+            if (!todaysTimings) return;
+            const order = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']; // الشروق ليست وقت صلاة
+            const now = new Date();
+            let next = null;
+            for (const key of order) {
+                const t = (todaysTimings[key] || '').split(' ')[0];
+                if (!t) continue;
+                const d = parseTimeToday(t);
+                if (d > now) { next = { key, date: d }; break; }
+            }
+            if (!next) {
+                // بعد العشاء: القادمة فجر الغد
+                const t = (todaysTimings.Fajr || '').split(' ')[0];
+                const d = parseTimeToday(t);
+                d.setDate(d.getDate() + 1);
+                next = { key: 'Fajr', date: d };
+            }
+
+            document.querySelectorAll('.prayer-row').forEach(r => r.classList.toggle('is-next', r.dataset.prayer === next.key));
+            const nameEl = document.getElementById('next-prayer-name');
+            const cdEl = document.getElementById('next-prayer-countdown');
+            if (nameEl) nameEl.textContent = PRAYER_LABELS_AR[next.key];
+
+            const diffMs = next.date - now;
+            const totalSec = Math.max(0, Math.floor(diffMs / 1000));
+            const hh = Math.floor(totalSec / 3600);
+            const mm = Math.floor((totalSec % 3600) / 60);
+            const ss = totalSec % 60;
+            const pad = n => String(n).padStart(2, '0');
+            if (cdEl) cdEl.textContent = hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+        }
+
+        function updateClock() {
+            const el = document.getElementById('mf-clock');
+            if (!el) return;
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            el.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        }
+
+        function showHadithOfDay() {
+            if (!localDbReady || !hadithEntries.length) return;
+            const dayIndex = Math.floor(Date.now() / 86400000); // نفس الحديث طوال اليوم، يتغيّر يوميًا
+            const h = hadithEntries[dayIndex % hadithEntries.length];
+            const box = document.getElementById('hadith-of-day');
+            const textEl = document.getElementById('hod-text');
+            const sourceEl = document.getElementById('hod-source');
+            if (!box || !textEl || !sourceEl) return;
+            const shortSource = h.bn.replace('صحيح ', '');
+            textEl.textContent = `"${h.a}"`;
+            sourceEl.textContent = `رواه ${shortSource}`;
+            box.style.display = 'block';
+        }
+
+        // ===== أدوات: القبلة، الأذكار، العمرة، الصيام =====
+        let qiblaComputed = false;
+        let calendarLoaded = false;
+
+        function toggleTool(name) {
+            const panel = document.getElementById('tool-' + name);
+            const isOpen = panel.style.display !== 'none';
+            document.querySelectorAll('.tool-panel').forEach(p => p.style.display = 'none');
+            panel.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen && name === 'fasting') computeFastingDays();
+        }
+
+        // اتجاه القبلة: زاوية الانحناء الأولي (bearing) من موقع المستخدم إلى الكعبة، بمعادلة الدائرة العظمى
+        const KAABA_LAT = 21.4225, KAABA_LNG = 39.8262;
+        function computeQibla() {
+            qiblaComputed = true;
+            const box = document.getElementById('qibla-content');
+            if (!navigator.geolocation) {
+                box.innerHTML = '<div class="qibla-note">⚠️ متصفحك لا يدعم تحديد الموقع الجغرافي.</div>';
+                return;
+            }
+            box.innerHTML = '<div class="qibla-note">⏳ جارٍ تحديد موقعك...</div>';
+            navigator.geolocation.getCurrentPosition(function(pos) {
+                const lat1 = pos.coords.latitude * Math.PI / 180;
+                const lng1 = pos.coords.longitude * Math.PI / 180;
+                const lat2 = KAABA_LAT * Math.PI / 180;
+                const lng2 = KAABA_LNG * Math.PI / 180;
+                const dLng = lng2 - lng1;
+                const y = Math.sin(dLng) * Math.cos(lat2);
+                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+                let bearing = Math.atan2(y, x) * 180 / Math.PI;
+                bearing = (bearing + 360) % 360;
+
+                const dirs = ['الشمال', 'الشمال الشرقي', 'الشرق', 'الجنوب الشرقي', 'الجنوب', 'الجنوب الغربي', 'الغرب', 'الشمال الغربي'];
+                const dirName = dirs[Math.round(bearing / 45) % 8];
+
+                box.innerHTML = `
+                    <div class="qibla-result">
+                        <div class="qibla-degree">${Math.round(bearing)}°</div>
+                        <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">من الشمال، نحو ${dirName}</div>
+                        <div class="qibla-compass">
+                            <svg viewBox="0 0 140 140" width="140" height="140">
+                                <circle cx="70" cy="70" r="65" fill="none" stroke="var(--card-border)" stroke-width="2"/>
+                                <text x="70" y="18" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="bold">ش</text>
+                                <g class="qibla-arrow" style="transform-origin:70px 70px; transform: rotate(${bearing}deg);">
+                                    <line x1="70" y1="70" x2="70" y2="18" stroke="var(--primary)" stroke-width="3" stroke-linecap="round"/>
+                                    <polygon points="70,10 64,24 76,24" fill="var(--primary)"/>
+                                </g>
+                                <circle cx="70" cy="70" r="4" fill="var(--primary)"/>
+                            </svg>
+                        </div>
+                        <div class="qibla-note">السهم يشير لاتجاه القبلة بالنسبة للشمال الحقيقي. وجّه الشمال في هذه الدائرة نحو الشمال الفعلي (باستخدام بوصلة هاتفك) ليدلّك السهم على اتجاه الكعبة بدقة.</div>
+                    </div>
+                `;
+            }, function(err) {
+                box.innerHTML = `<div class="qibla-note">⚠️ تعذّر الوصول للموقع الجغرافي (${err.message}). تأكد من منح الإذن للمتصفح.</div>`;
+            });
+        }
+
+        // أيام الصيام المستحبة: الإثنين والخميس القادمين + الأيام البيض (13-14-15 من الشهر الهجري الحالي)
+        function nextWeekday(targetDow) { // 0=الأحد ... 1=الإثنين ... 4=الخميس
+            const d = new Date();
+            const diff = (targetDow - d.getDay() + 7) % 7 || 7;
+            d.setDate(d.getDate() + diff);
+            return d;
+        }
+        function formatGregorian(d) {
+            return d.toLocaleDateString('ar-SA-u-ca-gregory', { weekday: 'long', day: 'numeric', month: 'long' });
+        }
+
+        async function computeFastingDays() {
+            const box = document.getElementById('fasting-content');
+            box.innerHTML = 'جارٍ الحساب...';
+            try {
+                const monday = nextWeekday(1);
+                const thursday = nextWeekday(4);
+
+                // نجيب التاريخ الهجري الحالي لحساب الأيام البيض (13-14-15) للشهر الهجري الجاري
+                const todayStr = new Date().toISOString().slice(0, 10).split('-').reverse().join('-');
+                const hRes = await fetch(`https://api.aladhan.com/v1/gToH/${todayStr}`);
+                const hData = await hRes.json();
+                const hMonth = hData.data.hijri.month.number;
+                const hYear = hData.data.hijri.year;
+                const hDay = parseInt(hData.data.hijri.day, 10);
+
+                let targetMonth = hMonth, targetYear = hYear;
+                if (hDay > 15) { // الأيام البيض فاتت لهذا الشهر — نحسب لشهر هجري قادم
+                    targetMonth = hMonth === 12 ? 1 : hMonth + 1;
+                    targetYear = hMonth === 12 ? hYear + 1 : hYear;
+                }
+
+                const whiteDaysPromises = [13, 14, 15].map(d =>
+                    fetch(`https://api.aladhan.com/v1/hToG/${String(d).padStart(2,'0')}-${String(targetMonth).padStart(2,'0')}-${targetYear}`).then(r => r.json())
+                );
+                const whiteDaysData = await Promise.all(whiteDaysPromises);
+                const whiteDaysGregorian = whiteDaysData.map(d => {
+                    const g = d.data.gregorian;
+                    return `${g.day} ${g.month.ar}`;
+                });
+
+                box.innerHTML = `
+                    <div class="fasting-row"><span class="fname">الإثنين القادم</span><span class="fdate">${formatGregorian(monday)}</span></div>
+                    <div class="fasting-row"><span class="fname">الخميس القادم</span><span class="fdate">${formatGregorian(thursday)}</span></div>
+                    <div class="fasting-row"><span class="fname">الأيام البيض (13-15 ${hData.data.hijri.month.ar})</span><span class="fdate">${whiteDaysGregorian.join(' • ')}</span></div>
+                `;
+            } catch (e) {
+                box.innerHTML = '⚠️ تعذّر حساب الأيام البيض (مشكلة اتصال) — إليك الإثنين والخميس القادمين فقط: ' +
+                    formatGregorian(nextWeekday(1)) + '، ' + formatGregorian(nextWeekday(4));
+            }
+        }
+
+        // التقويم: الأحداث الإسلامية القادمة (رأس السنة، عاشوراء، رمضان، العشر الأواخر، عيد الفطر)
+        async function loadIslamicEvents() {
+            calendarLoaded = true;
+            const box = document.getElementById('events-content');
+            box.innerHTML = 'جارٍ التحميل...';
+            try {
+                const todayStr = new Date().toISOString().slice(0, 10).split('-').reverse().join('-');
+                const hRes = await fetch(`https://api.aladhan.com/v1/gToH/${todayStr}`);
+                const hData = await hRes.json();
+                const curYear = hData.data.hijri.year;
+
+                const EVENTS = [
+                    { name: 'رأس السنة الهجرية', day: 1, month: 1 },
+                    { name: 'يوم عاشوراء', day: 10, month: 1 },
+                    { name: 'بداية رمضان', day: 1, month: 9 },
+                    { name: 'العشر الأواخر من رمضان', day: 21, month: 9 },
+                    { name: 'عيد الفطر', day: 1, month: 10 }
+                ];
+
+                const results = await Promise.all(EVENTS.map(async ev => {
+                    for (const yearTry of [curYear, curYear + 1]) {
+                        const res = await fetch(`https://api.aladhan.com/v1/hToG/${String(ev.day).padStart(2,'0')}-${String(ev.month).padStart(2,'0')}-${yearTry}`);
+                        const data = await res.json();
+                        const g = data.data.gregorian;
+                        const gDate = new Date(`${g.year}-${g.month.number}-${g.day}`);
+                        const now = new Date(); now.setHours(0,0,0,0);
+                        if (gDate >= now) {
+                            const daysLeft = Math.round((gDate - now) / 86400000);
+                            return { ...ev, daysLeft, gLabel: `${g.weekday.ar}، ${g.day} ${g.month.ar} ${g.year}`, hLabel: `${ev.day} ${data.data.hijri.month.ar} ${yearTry} هـ` };
+                        }
+                    }
+                    return null;
+                }));
+
+                box.innerHTML = results.filter(Boolean).map(r => `
+                    <div class="event-card">
+                        <div class="event-badge"><span class="num">${r.daysLeft}</span><span class="lbl">يوم</span></div>
+                        <div class="event-info">
+                            <div class="ename">${r.name}</div>
+                            <div class="edate">${r.hLabel} • ${r.gLabel}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                box.innerHTML = '⚠️ تعذّر تحميل الأحداث الإسلامية — تحقق من الاتصال بالإنترنت.';
+            }
+        }
+
+        function navigateTo(targetPage) {
+            ['home', 'knowledge', 'tools', 'calendar'].forEach(p => {
+                document.getElementById('tab-' + p).classList.remove('active');
+                document.getElementById('nav-' + p).classList.remove('active');
+            });
+
+            const mainTitle = document.getElementById('app-main-title');
+            const subTitle = document.getElementById('app-sub-title');
+            document.getElementById('tab-' + targetPage).classList.add('active');
+            document.getElementById('nav-' + targetPage).classList.add('active');
+
+            const titles = {
+                home: ["🕌 بوابة المسجد الرقمية", "مرحباً بك في بيت الله • Welcome to the Mosque"],
+                knowledge: ["📖 الموسوعة الإسلامية الرقمية", "بحث أسرع وأكثر استقراراً في القرآن الكريم والسنة النبوية"],
+                tools: ["🧭 أدوات", "القبلة، الأذكار، العمرة، والصيام"],
+                calendar: ["📅 التقويم", "الأحداث الإسلامية المهمة"]
+            };
+            mainTitle.innerText = titles[targetPage][0];
+            subTitle.innerText = titles[targetPage][1];
+
+            if (targetPage === 'tools' && !qiblaComputed) computeQibla();
+            if (targetPage === 'calendar' && !calendarLoaded) loadIslamicEvents();
+        }
+
+        // 🌟 البحث القرآني — محليًا بالكامل، بدون أي اتصال خارجي
+        async function searchQuranLibrary() {
+            const rawInput = document.getElementById('quran-search-input').value.trim();
+            const resBox = document.getElementById('quran-search-result');
+            const loadingBox = document.getElementById('quran-loading');
+            
+            if(!rawInput) {
+                resBox.innerHTML = "⚠️ الرجاء إدخال كلمة أو آية للبحث.";
+                resBox.classList.add('active');
+                return;
+            }
+            if (!localDbReady) {
+                resBox.innerHTML = "⏳ قاعدة البيانات المحلية لسه بتحمّل، حاول بعد لحظات.";
+                resBox.classList.add('active');
+                return;
+            }
+
+            loadingBox.classList.add('active');
+            resBox.classList.remove('active');
+            resBox.innerHTML = "";
+
+            const norm = normalizeArabic(rawInput);
+            const matches = quranVerses.filter(v => v.norm.includes(norm)).slice(0, 20);
+
+            if (matches.length > 0) {
+                let resultsHTML = `<div class="result-count">✅ وجدنا ${matches.length} نتيجة</div>`;
+                matches.forEach((m) => {
+                    const surahName = (quranSurahs[m.s] && quranSurahs[m.s].ar) || '';
+                    resultsHTML += `
+                        <div class="result-item">
+                            <div class="result-text">﴿ ${m.ar} ﴾</div>
+                            <div class="result-source">📖 سورة ${surahName} - الآية ${m.a}</div>
+                        </div>
+                    `;
+                });
+                resBox.innerHTML = resultsHTML;
+            } else {
+                resBox.innerHTML = "ℹ️ لم نجد نتائج دقيقة. جرب كتابة كلمة أو عبارة عربية أخرى.";
+            }
+            resBox.classList.add('active');
+            loadingBox.classList.remove('active');
+        }
+
+        // 🌟 البحث في الأحاديث — محليًا بالكامل (صحيح البخاري ومسلم)، بدون أي اتصال خارجي
+        async function searchHadithLibrary() {
+            const rawInput = document.getElementById('hadith-search-input').value.trim();
+            const resBox = document.getElementById('hadith-search-result');
+            const loadingBox = document.getElementById('hadith-loading');
+            
+            if(!rawInput) {
+                resBox.innerHTML = "⚠️ الرجاء إدخال كلمة أو جملة للبحث.";
+                resBox.classList.add('active');
+                return;
+            }
+            if (!localDbReady) {
+                resBox.innerHTML = "⏳ قاعدة البيانات المحلية لسه بتحمّل، حاول بعد لحظات.";
+                resBox.classList.add('active');
+                return;
+            }
+
+            loadingBox.classList.add('active');
+            resBox.classList.remove('active');
+            resBox.innerHTML = "";
+
+            const norm = normalizeArabic(rawInput);
+            const matches = hadithEntries.filter(h => h.norm.includes(norm)).slice(0, 20);
+
+            if (matches.length > 0) {
+                let resultsHTML = `<div class="result-count">✅ وجدنا ${matches.length} حديث</div>`;
+                matches.forEach((h) => {
+                    resultsHTML += `
+                        <div class="result-item">
+                            <div class="result-text">« ${h.a} »</div>
+                            <div class="result-source">📜 ${h.bn} — حديث رقم ${h.i}</div>
+                        </div>
+                    `;
+                });
+                resBox.innerHTML = resultsHTML;
+            } else {
+                resBox.innerHTML = "ℹ️ لم نجد أحاديث مطابقة. جرب كلمة عربية أقصر أو أدق.";
+            }
+            resBox.classList.add('active');
+            loadingBox.classList.remove('active');
+        }
+
+        function listenToCloud() {
+            setInterval(async () => {
+                try {
+                    const response = await fetch(FIREBASE_DB_URL); 
+                    const data = await response.json();
+                    if(data && data.text && data.timestamp !== lastTimestamp) {
+                        lastTimestamp = data.timestamp; 
+                        lastText = data.text; 
+                        runTranslation(lastText);
+                    }
+                } catch (e) { console.log("Firebase connection standby."); }
+            }, 700);
+        }
+
+        // ترجمة عامة — تُستخدم للترجمة الحية العادية، ولأي لغة لا تتوفر لها ترجمة معتمدة محليًا
+        // ذاكرة تخزين مؤقت للترجمات — لو نفس الجملة (زي آية شائعة) اتذكرت أكتر من مرة، منترجمهاش تاني
+        const translationCache = new Map();
+
+        async function translateViaWorker(text, targetLang) {
+            if (!TRANSLATE_WORKER_URL) throw new Error('Worker not configured');
+            const response = await fetch(TRANSLATE_WORKER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, targetLang })
+            });
+            if (!response.ok) throw new Error('Worker HTTP ' + response.status);
+            const data = await response.json();
+            const translated = (data && data.translated || '').trim();
+            if (!translated) throw new Error('Worker returned an empty translation');
+            return translated;
+        }
+
+        async function translateViaGoogle(text, targetLang) {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ar&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Google HTTP ' + response.status);
+            const data = await response.json();
+            let translated = "";
+            data[0].forEach(s => { if (s[0]) translated += s[0]; });
+            translated = translated.trim();
+            if (!translated) throw new Error('Google returned an empty translation');
+            return translated;
+        }
+
+        async function translateViaMyMemory(text, targetLang) {
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ar|${targetLang}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('MyMemory HTTP ' + response.status);
+            const data = await response.json();
+            const translated = (data && data.responseData && data.responseData.translatedText || '').trim();
+            if (!translated) throw new Error('MyMemory returned an empty translation');
+            return translated;
+        }
+
+        // يجرّب جوجل أولًا (مرتين بسرعة)، ولو فشل أو رجّع نص فاضي/ناقص ينتقل فورًا لخدمة بديلة
+        // بدل ما يستنى ويرجع نص ناقص للمصلي — وده بيقلل التأخير الكلي بدل ما يزوّده
+        async function googleTranslate(text, targetLang) {
+            const cacheKey = `${targetLang}::${text}`;
+            if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+
+            const providers = TRANSLATE_WORKER_URL
+                ? [translateViaWorker, translateViaWorker, translateViaGoogle, translateViaMyMemory]
+                : [translateViaGoogle, translateViaGoogle, translateViaMyMemory, translateViaMyMemory];
+            let lastError;
+            for (const provider of providers) {
+                try {
+                    const translated = await provider(text, targetLang);
+                    translationCache.set(cacheKey, translated);
+                    return translated;
+                } catch (e) {
+                    lastError = e;
+                    await new Promise(r => setTimeout(r, 200));
+                }
+            }
+            throw lastError;
+        }
+
+        // ===== محرك المطابقة الضبابية على مستوى الكلمات =====
+        // لماذا؟ التعرف الصوتي يخطئ في كلمات ("قطع" بدل "انقطع"، "تشاون" بدل "تشاقون") ولا يرسل علامات ترقيم،
+        // فالمطابقة الحرفية (substring) مستحيلة عمليًا في الخطبة الحية. هذا المحرك يحاذي الكلمات واحدةً واحدةً
+        // مع السماح بأخطاء محدودة (كلمة مختلفة/محذوفة/مضافة)، ويكتشف عدة اقتباسات من سور مختلفة في نفس المقطع.
+
+        // تشابه كلمتين (خطأ تعرف صوتي بسيط): احتواء أو مسافة تحرير ≤ 2 للكلمات الطويلة
+        function wordsSimilar(a, b) {
+            if (a === b) return true;
+            if (Math.abs(a.length - b.length) > 2) return false;
+            const shorter = a.length < b.length ? a : b;
+            const longer = a.length < b.length ? b : a;
+            if (shorter.length < 3) return false;
+            if (longer.includes(shorter)) return true; // قطع/انقطع، يري/يراه
+            const maxDist = longer.length >= 5 ? 2 : 1;
+            return editDistanceAtMost(a, b, maxDist);
+        }
+        function editDistanceAtMost(a, b, k) {
+            if (Math.abs(a.length - b.length) > k) return false;
+            const m = a.length, n = b.length;
+            let prev = Array.from({ length: n + 1 }, (_, j) => j);
+            for (let i = 1; i <= m; i++) {
+                const cur = [i];
+                let rowMin = i;
+                for (let j = 1; j <= n; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                    if (cur[j] < rowMin) rowMin = cur[j];
+                }
+                if (rowMin > k) return false;
+                prev = cur;
+            }
+            return prev[n] <= k;
+        }
+
+        // محاذاة كلمات الخطيب مع كلمات آية/حديث بدءًا من موضع معين، مع سماحية أخطاء متناسبة
+        function alignSpan(spokenWords, si, entryWords, vi, maxErrRatio) {
+            let matched = 0, errors = 0;
+            let i = si, j = vi;
+            let lastMatchI = si - 1, lastMatchJ = vi - 1;
+            while (i < spokenWords.length && j < entryWords.length) {
+                if (spokenWords[i] === entryWords[j]) {
+                    matched++; lastMatchI = i; lastMatchJ = j; i++; j++;
+                } else if (wordsSimilar(spokenWords[i], entryWords[j])) {
+                    matched += 0.75; errors += 0.25; lastMatchI = i; lastMatchJ = j; i++; j++;
+                } else if (i + 1 < spokenWords.length && spokenWords[i + 1] === entryWords[j]) { errors++; i++; }
+                else if (j + 1 < entryWords.length && spokenWords[i] === entryWords[j + 1]) { errors++; j++; }
+                else if (i + 1 < spokenWords.length && j + 1 < entryWords.length && spokenWords[i + 1] === entryWords[j + 1]) { errors++; i++; j++; }
+                else break;
+                if (errors > Math.max(2, (matched + errors) * maxErrRatio)) break;
+            }
+            return { matched, errors, spokenEnd: lastMatchI, entryEnd: lastMatchJ };
+        }
+
+        // المسح الرئيسي: نافذة منزلقة على كلمات الخطيب — كل كلمتين متتاليتين تُبحثان في الفهرس،
+        // وأفضل محاذاة تُسجّل ثم نواصل المسح بعد نهايتها (فيكتشف عدة اقتباسات متتالية)
+        function detectQuotes(spokenWords, entries, index, opts) {
+            const minWords = opts.minWords, maxErrRatio = opts.maxErrRatio || 0.34;
+            const results = [];
+            let si = 0;
+            while (si < spokenWords.length - 1) {
+                const bg = spokenWords[si] + ' ' + spokenWords[si + 1];
+                const candidates = index.get(bg);
+                let best = null;
+                if (candidates) {
+                    for (const idx of candidates) {
+                        const e = entries[idx];
+                        for (let j = 0; j < e.words.length - 1; j++) {
+                            if (e.words[j] !== spokenWords[si] || e.words[j + 1] !== spokenWords[si + 1]) continue;
+                            const span = alignSpan(spokenWords, si, e.words, j, maxErrRatio);
+                            // الآيات القصيرة: نقبلها لو تغطت بالكامل تقريبًا (80%+ من كلماتها)
+                            const effMinWords = Math.min(minWords, Math.max(2.5, e.words.length * 0.8));
+                            if (span.matched >= effMinWords) {
+                                const score = span.matched - span.errors * 0.5;
+                                if (!best || score > best.score) best = { entryIdx: idx, score, span, startWord: si, entryStart: j };
+                            }
+                        }
+                    }
+                }
+                if (best) { results.push(best); si = best.span.spokenEnd + 1; }
+                else si++;
+            }
+            return results;
+        }
+
+        // ترجيح السياق: آية متكررة النص في أكثر من سورة (مثل "ولا تزر وازرة...") — نختار النسخة التي تواصل سياق التلاوة الجارية
+        function preferContextualVerses(matches) {
+            return matches.map(function(m, k) {
+                const v = quranVerses[m.entryIdx];
+                const prev = k > 0 ? quranVerses[matches[k - 1].entryIdx] : null;
+                const next = k < matches.length - 1 ? quranVerses[matches[k + 1].entryIdx] : null;
+                const fitsContext = function(x) { return (prev && x.s === prev.s && x.a > prev.a && x.a - prev.a <= 4) || (next && x.s === next.s && x.a < next.a && next.a - x.a <= 4); };
+                if (fitsContext(v)) return m;
+                const vSet = new Set(v.words);
+                for (let xi = 0; xi < quranVerses.length; xi++) {
+                    if (xi === m.entryIdx) continue;
+                    const x = quranVerses[xi];
+                    if (!fitsContext(x)) continue;
+                    let n = 0; for (const w of x.words) if (vSet.has(w)) n++;
+                    if (n >= Math.min(x.words.length, v.words.length) * 0.7) return { ...m, entryIdx: xi };
+                }
+                return m;
+            });
+        }
+
+        // تمديد النطاق للخلف: لو التلاوة اكتُشفت من الآية 34، نفحص هل الآية 33 منطوقة قبلها أيضًا
+        // (أول كلمتين فيها قد تختلفان بسبب خطأ تعرف صوتي مثل "فرأيت" بدل "أفرأيت" فتفلت من الفهرس)
+        function extendRangesBackward(matches, spokenWords) {
+            for (const m of matches) {
+                let v = quranVerses[m.entryIdx];
+                while (m.startWord > 0 && v.a > 1) {
+                    const prevVerse = versesBySurahAyah.get(v.s + ':' + (v.a - 1));
+                    if (!prevVerse) break;
+                    const pw = prevVerse.words;
+                    const from = Math.max(0, m.startWord - pw.length - 2);
+                    const windowWords = spokenWords.slice(from, m.startWord);
+                    let matched = 0;
+                    for (const w of pw) if (windowWords.some(function(x) { return x === w || wordsSimilar(x, w); })) matched++;
+                    if (matched >= Math.max(2, pw.length * 0.6)) { m.extraFromAyah = prevVerse.a; m.startWord = from; v = prevVerse; }
+                    else break;
+                }
+            }
+            return matches;
+        }
+
+        // دمج الآيات المتتالية من نفس السورة في نطاق واحد (النجم 33-42 بطاقة واحدة بدل 10 بطاقات)
+        function mergeVerseRanges(matches) {
+            if (!matches.length) return [];
+            const sorted = matches.slice().sort(function(a, b) { return a.startWord - b.startWord; });
+            const ranges = [];
+            for (const m of sorted) {
+                const v = quranVerses[m.entryIdx];
+                const fromAyah = m.extraFromAyah != null ? Math.min(m.extraFromAyah, v.a) : v.a;
+                const last = ranges[ranges.length - 1];
+                if (last && last.surah === v.s && fromAyah >= last.ayahFrom && fromAyah <= last.ayahTo + 3) {
+                    last.ayahTo = Math.max(last.ayahTo, v.a);
+                } else {
+                    ranges.push({ surah: v.s, ayahFrom: fromAyah, ayahTo: v.a });
+                }
+            }
+            return ranges;
+        }
+
+        // إزالة عبارات الإسناد المطبّعة قبل مطابقة الأحاديث — حتى لا يطابق الإسناد وحده حديثًا كاملًا
+        // ("قال رسول الله صلى الله عليه وسلم" — 7 كلمات موجودة حرفيًا في آلاف الأحاديث)
+        const ISNAD_PHRASES_NORM = [
+            'قال رسول الله صلي الله عليه وسلم', 'قال النبي صلي الله عليه وسلم',
+            'رسول الله صلي الله عليه وسلم', 'صلي الله عليه وسلم',
+            'رضي الله عنهما', 'رضي الله عنها', 'رضي الله عنهم', 'رضي الله عنه'
+        ];
+        function stripIsnadNorm(normText) {
+            let out = ' ' + normText + ' ';
+            for (const p of ISNAD_PHRASES_NORM) out = out.split(' ' + p + ' ').join(' ');
+            return out.replace(/\s+/g, ' ').trim();
+        }
+
+        // معرّف الطلب الحالي — يمنع استجابة قديمة بطيئة من الكتابة فوق نتيجة أحدث ظهرت بالفعل
+        let latestRequestId = 0;
+
+        async function runTranslation(text) {
+            const myRequestId = ++latestRequestId;
+            const targetLang = document.getElementById('lang-select').value;
+            const outputBox = document.getElementById('translation-output');
+
+            try {
+                const translated = await googleTranslate(text, targetLang);
+                if (myRequestId !== latestRequestId) return;
+                outputBox.innerText = translated || '—';
+                outputBox.classList.remove('flash');
+                void outputBox.offsetWidth; // إعادة تشغيل الأنيميشن من الصفر
+                outputBox.classList.add('flash');
+            } catch (e) {
+                if (myRequestId === latestRequestId) outputBox.innerText = '⚠️ تعذّرت الترجمة';
+            }
+
+            // مربع القرآن والحديث مستقل تمامًا عن مربع الترجمة — لا يبطئه ولا يتأثر به
+            detectAndLogQuranHadith(text, targetLang);
+        }
+
+        // ذاكرة الجلسة: ما عُرض بالفعل خلال الخطبة الحالية — التعرف الصوتي يرسل نفس المقطع مرات متتالية
+        // وهو يتوسع، فنحدّث البطاقة الموجودة (مثلاً النجم 33-35 تصبح 33-42) بدل تكرارها
+        const shownQuranRanges = new Map(); // surah -> {ayahFrom, ayahTo, el}
+        const shownHadiths = new Set();     // "collection#id"
+
+        async function detectAndLogQuranHadith(text, targetLang) {
+            if (!localDbReady) return;
+            const spokenWords = tokenizeWords(normalizeArabic(text));
+            if (spokenWords.length < 2) return;
+
+            // ---- القرآن: مسح + ترجيح سياقي + تمديد للخلف + دمج نطاقات ----
+            let qMatches = detectQuotes(spokenWords, quranVerses, quranBigramIndex, { minWords: 3.5, maxErrRatio: 0.34 });
+            qMatches = preferContextualVerses(qMatches);
+            qMatches = extendRangesBackward(qMatches, spokenWords);
+            const ranges = mergeVerseRanges(qMatches);
+
+            // ---- الحديث: نزيل الإسناد من كلام الخطيب ثم نطابق (عتبة أعلى لأن لغة الحديث أقرب لكلام الناس) ----
+            const strippedWords = tokenizeWords(stripIsnadNorm(normalizeArabic(text)));
+            const hMatches = detectQuotes(strippedWords, hadithEntries, hadithBigramIndex, { minWords: 5, maxErrRatio: 0.34 });
+
+            const tasks = [];
+
+            for (const r of ranges) {
+                const existing = shownQuranRanges.get(r.surah);
+                if (existing && r.ayahFrom >= existing.ayahFrom - 3 && r.ayahFrom <= existing.ayahTo + 3) {
+                    // نفس التلاوة مستمرة — وسّع النطاق المعروض لو زاد
+                    const newFrom = Math.min(existing.ayahFrom, r.ayahFrom);
+                    const newTo = Math.max(existing.ayahTo, r.ayahTo);
+                    if (newFrom !== existing.ayahFrom || newTo !== existing.ayahTo) {
+                        existing.ayahFrom = newFrom; existing.ayahTo = newTo;
+                        tasks.push(renderQuranRange(r.surah, newFrom, newTo, targetLang, existing));
+                    }
+                } else {
+                    const state = { ayahFrom: r.ayahFrom, ayahTo: r.ayahTo, el: null };
+                    shownQuranRanges.set(r.surah, state);
+                    tasks.push(renderQuranRange(r.surah, r.ayahFrom, r.ayahTo, targetLang, state));
+                }
+            }
+
+            const seenNow = new Set();
+            for (const m of hMatches) {
+                const h = hadithEntries[m.entryIdx];
+                const hKey = h.bn + '#' + h.i;
+                if (shownHadiths.has(hKey) || seenNow.has(hKey)) continue;
+                seenNow.add(hKey); shownHadiths.add(hKey);
+                tasks.push(renderHadith(h, targetLang));
+            }
+
+            await Promise.all(tasks);
+        }
+
+        // يعرض (أو يحدّث) بطاقة نطاق آيات: آية واحدة أو تلاوة متتالية (مثل النجم 33-42) في بطاقة واحدة مرتبة
+        async function renderQuranRange(surah, ayahFrom, ayahTo, targetLang, state) {
+            try {
+                const surahName = (quranSurahs[surah] && quranSurahs[surah].ar) || '';
+                const versesInRange = [];
+                for (let a = ayahFrom; a <= ayahTo; a++) {
+                    const v = versesBySurahAyah.get(surah + ':' + a);
+                    if (v) versesInRange.push(v);
+                }
+                if (!versesInRange.length) return;
+
+                const arabicFull = versesInRange.map(v => `${v.ar} （${v.a}）`).join(' ');
+                let translated, verified;
+                try {
+                    if (targetLang === 'en' && versesInRange.every(v => v.en)) {
+                        translated = versesInRange.map(v => `(${v.a}) ${v.en}`).join(' ');
+                        verified = true; // ترجمة معتمدة من قاعدة البيانات المحلية
+                    } else {
+                        translated = await googleTranslate(versesInRange.map(v => v.ar).join(' ● '), targetLang);
+                        verified = false;
+                    }
+                } catch (e) {
+                    translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
+                    verified = false;
+                }
+
+                const sourceLabel = ayahFrom === ayahTo
+                    ? `سورة ${surahName} : الآية ${ayahFrom}`
+                    : `سورة ${surahName} : الآيات ${ayahFrom}–${ayahTo}`;
+                const note = verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — لا نسخة معتمدة محليًا بهذه اللغة';
+
+                if (state.el && state.el.isConnected) {
+                    // تحديث البطاقة القائمة (التلاوة امتدت)
+                    state.el.querySelector('.qh-badge').textContent = `📖 آية قرآنية — ${sourceLabel}`;
+                    state.el.querySelector('.qh-arabic').textContent = `﴾ ${arabicFull} ﴿`;
+                    state.el.querySelector('.qh-translation').textContent = translated || '—';
+                    const noteEl = state.el.querySelector('.qh-note');
+                    if (noteEl) noteEl.textContent = note;
+                } else {
+                    state.el = addQuranHadithEntry('quran', { arabic: arabicFull, source: sourceLabel, translated, note });
+                }
+            } catch (e) { console.error('Quran range render error:', e); }
+        }
+
+        async function renderHadith(h, targetLang) {
+            try {
+                let translated, verified;
+                try {
+                    if (targetLang === 'en' && h.en) { translated = h.en; verified = true; }
+                    else { translated = await googleTranslate(h.a, targetLang); verified = false; }
+                } catch (e) {
+                    translated = '⚠️ تعذّرت الترجمة الآن (النص العربي أعلاه مؤكد وصحيح)';
+                    verified = false;
+                }
+                addQuranHadithEntry('hadith', {
+                    arabic: h.a, // نص الحديث المعتمد من القاعدة (لا ما التقطه الميكروفون بأخطائه)
+                    source: `${h.bn} — حديث رقم ${h.i}`,
+                    translated,
+                    note: verified ? 'ترجمة معتمدة (من قاعدة البيانات المحلية)' : 'ترجمة آلية — يُرجى المراجعة'
+                });
+            } catch (e) { console.error('Hadith render error:', e); }
+        }
+
+        function addQuranHadithEntry(type, entry) {
+            const log = document.getElementById('quran-hadith-log');
+            const emptyMsg = document.getElementById('qh-empty');
+            if (emptyMsg) emptyMsg.remove();
+
+            const item = document.createElement('div');
+            item.className = 'qh-item ' + type;
+            const badgeLabel = type === 'quran' ? '📖 آية قرآنية' : '✨ حديث نبوي';
+            item.innerHTML = `
+                <div class="qh-badge">${badgeLabel} — ${entry.source}</div>
+                <div class="qh-arabic">﴾ ${entry.arabic} ﴿</div>
+                <div class="qh-translation">${entry.translated || '—'}</div>
+                ${entry.note ? `<div class="qh-note">${entry.note}</div>` : ''}
+            `;
+            log.insertBefore(item, log.firstChild);
+            while (log.children.length > 10) log.removeChild(log.lastChild);
+            return item; // نرجع العنصر حتى تمكن تحديث بطاقة نطاق آيات قائمة أثناء امتداد التلاوة
+        }
+
+        function changeLanguage() {
+            const select = document.getElementById('lang-select');
+            const isRtl = select.options[select.selectedIndex].getAttribute('data-rtl') === 'true';
+            document.getElementById('translation-output').className = isRtl ? "translation-display rtl" : "translation-display ltr";
+            if(lastText) runTranslation(lastText);
+        }
+
+        function speak() {
+            try {
+                const text = document.getElementById('translation-output').innerText; 
+                const lang = document.getElementById('lang-select').value;
+                window.speechSynthesis.cancel();
+                if ('speechSynthesis' in window && text) {
+                    const speech = new SpeechSynthesisUtterance(text); 
+                    speech.lang = lang; 
+                    window.speechSynthesis.speak(speech);
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        function showVerseOfTheDay() {
+            if (!localDbReady || quranVerses.length === 0) return;
+            const v = quranVerses[Math.floor(Math.random() * quranVerses.length)];
+            const surahName = (quranSurahs[v.s] && quranSurahs[v.s].ar) || '';
+            document.getElementById('quran-text').innerText = `«${v.ar}»`;
+            document.getElementById('quran-source').innerText = ` سورة ${surahName} - الآية ${v.a}`;
+        }
+
+        // إضافة مستمع لحدث Enter في حقول البحث
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('quran-search-input').addEventListener('keypress', function(e) {
+                if(e.key === 'Enter') searchQuranLibrary();
+            });
+            document.getElementById('hadith-search-input').addEventListener('keypress', function(e) {
+                if(e.key === 'Enter') searchHadithLibrary();
+            });
+        });
+
+        window.onload = function() { 
+            loadDisplayPreferences();
+            checkFirebaseConnection();
+            loadLocalDatabases();
+            listenToCloud();
+            initCitySelect();
+            loadPrayerTimes();
+            updateClock();
+            setInterval(updateClock, 30000);       // تحديث الساعة كل نصف دقيقة
+            setInterval(updateNextPrayer, 1000);    // عد تنازلي حي كل ثانية
+            setInterval(loadPrayerTimes, 3600000);  // إعادة جلب المواقيت كل ساعة (تحسبًا لتغيّر اليوم/التاريخ)
+        };
+    </script>
+</body>
+</html>

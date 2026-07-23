@@ -431,7 +431,17 @@
                 <div class="umrah-step"><span class="umrah-num">3</span><div><b>الصلاة خلف مقام إبراهيم</b><br>ركعتان بعد الطواف إن أمكن، وإلا في أي مكان بالمسجد</div></div>
                 <div class="umrah-step"><span class="umrah-num">4</span><div><b>السعي</b><br>سبعة أشواط بين الصفا والمروة</div></div>
                 <div class="umrah-step"><span class="umrah-num">5</span><div><b>الحلق أو التقصير</b><br>حلق الرأس كاملاً أو تقصير الشعر — وبه تتم العمرة</div></div>
+
+                <div class="adhkar-sub-title">🤲 أذكار وأدعية العمرة المستجابة</div>
+                <div class="adhkar-item"><b>دعاء التلبية:</b><br>لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لَا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكَ، لَا شَرِيكَ لَكَ</div>
+                <div class="adhkar-item"><b>عند رؤية الكعبة:</b><br>اللَّهُمَّ زِدْ هَذَا الْبَيْتَ تَشْرِيفًا وَتَعْظِيمًا وَتَكْرِيمًا وَمَهَابَةً، وَزِدْ مَنْ شَرَّفَهُ وَكَرَّمَهُ مِمَّنْ حَجَّهُ أَوِ اعْتَمَرَهُ تَشْرِيفًا وَتَكْرِيمًا وَتَعْظِيمًا وَبِرًّا</div>
+                <div class="adhkar-item"><b>عند استلام الحجر الأسود:</b><br>بِسْمِ اللَّهِ، وَاللَّهُ أَكْبَرُ</div>
+                <div class="adhkar-item"><b>بين الركن اليماني والحجر الأسود (يُكرَّر كل شوط):</b><br>رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ</div>
+                <div class="adhkar-item"><b>عند بدء السعي (يُقال عند الاقتراب من الصفا):</b><br>إِنَّ الصَّفَا وَالْمَرْوَةَ مِنْ شَعَائِرِ اللَّهِ، أَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ</div>
+                <div class="adhkar-item"><b>فوق الصفا والمروة (يُقال ثلاث مرات، وبينها الدعاء):</b><br>اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ، لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ، لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ، أَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الْأَحْزَابَ وَحْدَهُ</div>
+                <div class="adhkar-item"><b>عند شرب ماء زمزم:</b><br>اللَّهُمَّ إِنِّي أَسْأَلُكَ عِلْمًا نَافِعًا، وَرِزْقًا وَاسِعًا، وَشِفَاءً مِنْ كُلِّ دَاءٍ</div>
             </div>
+
 
             <div class="masjidi-card tool-panel" id="tool-fasting" style="display:none;">
                 <div class="masjidi-card-title">🌙 أيام الصيام القادمة</div>
@@ -833,10 +843,15 @@
             document.querySelectorAll('.tool-panel').forEach(p => p.style.display = 'none');
             panel.style.display = isOpen ? 'none' : 'block';
             if (!isOpen && name === 'fasting') computeFastingDays();
+            if (isOpen && name === 'qibla' && typeof stopLiveCompass === 'function') stopLiveCompass();
         }
 
         // اتجاه القبلة: زاوية الانحناء الأولي (bearing) من موقع المستخدم إلى الكعبة، بمعادلة الدائرة العظمى
         const KAABA_LAT = 21.4225, KAABA_LNG = 39.8262;
+        let qiblaBearing = null;
+        let compassWatching = false;
+        let orientationHandler = null;
+
         function computeQibla() {
             qiblaComputed = true;
             const box = document.getElementById('qibla-content');
@@ -844,7 +859,8 @@
                 box.innerHTML = '<div class="qibla-note">⚠️ متصفحك لا يدعم تحديد الموقع الجغرافي.</div>';
                 return;
             }
-            box.innerHTML = '<div class="qibla-note">⏳ جارٍ تحديد موقعك...</div>';
+            stopLiveCompass();
+            box.innerHTML = '<div class="qibla-note">⏳ جارٍ تحديد موقعك... (يعمل من أي دولة أو مدينة)</div>';
             navigator.geolocation.getCurrentPosition(function(pos) {
                 const lat1 = pos.coords.latitude * Math.PI / 180;
                 const lng1 = pos.coords.longitude * Math.PI / 180;
@@ -855,6 +871,7 @@
                 const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
                 let bearing = Math.atan2(y, x) * 180 / Math.PI;
                 bearing = (bearing + 360) % 360;
+                qiblaBearing = bearing;
 
                 const dirs = ['الشمال', 'الشمال الشرقي', 'الشرق', 'الجنوب الشرقي', 'الجنوب', 'الجنوب الغربي', 'الغرب', 'الشمال الغربي'];
                 const dirName = dirs[Math.round(bearing / 45) % 8];
@@ -866,20 +883,86 @@
                         <div class="qibla-compass">
                             <svg viewBox="0 0 140 140" width="140" height="140">
                                 <circle cx="70" cy="70" r="65" fill="none" stroke="var(--card-border)" stroke-width="2"/>
-                                <text x="70" y="18" text-anchor="middle" font-size="12" fill="var(--text-secondary)" font-weight="bold">ش</text>
-                                <g class="qibla-arrow" style="transform-origin:70px 70px; transform: rotate(${bearing}deg);">
-                                    <line x1="70" y1="70" x2="70" y2="18" stroke="var(--primary)" stroke-width="3" stroke-linecap="round"/>
-                                    <polygon points="70,10 64,24 76,24" fill="var(--primary)"/>
+                                <!-- سهم ثابت أعلى البوصلة يمثّل اتجاه أعلى الجوال -->
+                                <polygon points="70,1 63,17 77,17" fill="var(--text-secondary)"/>
+                                <g id="qibla-disc" style="transform-origin:70px 70px; transform: rotate(0deg); transition: transform 0.12s ease-out;">
+                                    <text x="70" y="17" text-anchor="middle" font-size="11" fill="var(--text-secondary)" font-weight="bold">ش</text>
+                                    <text x="70" y="129" text-anchor="middle" font-size="10" fill="var(--text-secondary)">ج</text>
+                                    <text x="11" y="74" text-anchor="middle" font-size="10" fill="var(--text-secondary)">غ</text>
+                                    <text x="129" y="74" text-anchor="middle" font-size="10" fill="var(--text-secondary)">ق</text>
+                                    <g style="transform-origin:70px 70px; transform: rotate(${bearing}deg);">
+                                        <line x1="70" y1="70" x2="70" y2="28" stroke="var(--primary)" stroke-width="3" stroke-linecap="round"/>
+                                        <circle cx="70" cy="24" r="10" fill="var(--primary)"/>
+                                        <text x="70" y="28" text-anchor="middle" font-size="11">🕋</text>
+                                    </g>
                                 </g>
-                                <circle cx="70" cy="70" r="4" fill="var(--primary)"/>
+                                <circle cx="70" cy="70" r="4" fill="var(--text-secondary)"/>
                             </svg>
                         </div>
-                        <div class="qibla-note">السهم يشير لاتجاه القبلة بالنسبة للشمال الحقيقي. وجّه الشمال في هذه الدائرة نحو الشمال الفعلي (باستخدام بوصلة هاتفك) ليدلّك السهم على اتجاه الكعبة بدقة.</div>
+                        <button class="btn-listen" style="width:100%;margin-top:6px;" id="qibla-compass-btn" onclick="toggleLiveCompass()">🧭 تفعيل البوصلة الحية</button>
+                        <div class="qibla-note" id="qibla-compass-status"></div>
+                        <div class="qibla-note">وجّه أعلى جوالك (السهم الرمادي) نحو رمز الكعبة 🕋 داخل الدائرة، وعند تفعيل البوصلة الحية سيتحرك السهم تلقائيًا مع دوران جوالك ليدلّك على اتجاه القبلة الحقيقي أينما كنت.</div>
                     </div>
                 `;
             }, function(err) {
                 box.innerHTML = `<div class="qibla-note">⚠️ تعذّر الوصول للموقع الجغرافي (${err.message}). تأكد من منح الإذن للمتصفح.</div>`;
-            });
+            }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+        }
+
+        // البوصلة الحية: تربط دوران دائرة القبلة باتجاه الجوال الفعلي عبر حساس device orientation
+        function toggleLiveCompass() {
+            if (compassWatching) { stopLiveCompass(); return; }
+
+            const status = document.getElementById('qibla-compass-status');
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ يتطلب إذنًا صريحًا من المستخدم قبل قراءة حساسات الاتجاه
+                DeviceOrientationEvent.requestPermission().then(function(response) {
+                    if (response === 'granted') startLiveCompass();
+                    else if (status) status.innerHTML = '⚠️ تم رفض إذن الوصول لحساس الاتجاه، فلن تعمل البوصلة الحية.';
+                }).catch(function(e) {
+                    if (status) status.innerHTML = '⚠️ تعذّر تفعيل البوصلة الحية: ' + e.message;
+                });
+            } else if ('DeviceOrientationEvent' in window) {
+                startLiveCompass();
+            } else if (status) {
+                status.innerHTML = '⚠️ جهازك أو متصفحك لا يدعم حساس البوصلة. جرّب من جوال بمتصفح حديث (Chrome أو Safari).';
+            }
+        }
+
+        function startLiveCompass() {
+            compassWatching = true;
+            const btn = document.getElementById('qibla-compass-btn');
+            const status = document.getElementById('qibla-compass-status');
+            if (btn) btn.textContent = '⏹ إيقاف البوصلة الحية';
+            if (status) status.innerHTML = '🧭 البوصلة نشطة — حرّك جوالك ببطء ليتحرك السهم مع الاتجاه الحقيقي';
+
+            orientationHandler = function(event) {
+                let heading = null;
+                if (typeof event.webkitCompassHeading === 'number') {
+                    heading = event.webkitCompassHeading; // سفاري iOS: زاوية دقيقة من الشمال الحقيقي مباشرة
+                } else if (event.alpha !== null && event.alpha !== undefined) {
+                    heading = 360 - event.alpha; // أندرويد/كروم
+                }
+                if (heading === null || isNaN(heading)) return;
+                const disc = document.getElementById('qibla-disc');
+                if (disc) disc.style.transform = `rotate(${(-heading + 360) % 360}deg)`;
+            };
+
+            const eventName = ('ondeviceorientationabsolute' in window) ? 'deviceorientationabsolute' : 'deviceorientation';
+            window.addEventListener(eventName, orientationHandler, true);
+        }
+
+        function stopLiveCompass() {
+            if (!compassWatching) return;
+            compassWatching = false;
+            const btn = document.getElementById('qibla-compass-btn');
+            const status = document.getElementById('qibla-compass-status');
+            if (btn) btn.textContent = '🧭 تفعيل البوصلة الحية';
+            if (status) status.innerHTML = '';
+            const eventName = ('ondeviceorientationabsolute' in window) ? 'deviceorientationabsolute' : 'deviceorientation';
+            if (orientationHandler) window.removeEventListener(eventName, orientationHandler, true);
+            const disc = document.getElementById('qibla-disc');
+            if (disc) disc.style.transform = 'rotate(0deg)';
         }
 
         // أيام الصيام المستحبة: الإثنين والخميس القادمين + الأيام البيض (13-14-15 من الشهر الهجري الحالي)
@@ -942,6 +1025,7 @@
             try {
                 const todayStr = new Date().toISOString().slice(0, 10).split('-').reverse().join('-');
                 const hRes = await fetch(`https://api.aladhan.com/v1/gToH/${todayStr}`);
+                if (!hRes.ok) throw new Error('hijri-fetch-failed');
                 const hData = await hRes.json();
                 const curYear = hData.data.hijri.year;
 
@@ -953,22 +1037,37 @@
                     { name: 'عيد الفطر', day: 1, month: 10 }
                 ];
 
-                const results = await Promise.all(EVENTS.map(async ev => {
+                // نجلب كل حدث بشكل متتابع (لا بالتوازي) لتفادي حظر/تقييد الـ API عند إرسال طلبات كثيرة دفعة واحدة
+                const results = [];
+                for (const ev of EVENTS) {
+                    let found = null;
                     for (const yearTry of [curYear, curYear + 1]) {
-                        const res = await fetch(`https://api.aladhan.com/v1/hToG/${String(ev.day).padStart(2,'0')}-${String(ev.month).padStart(2,'0')}-${yearTry}`);
-                        const data = await res.json();
-                        const g = data.data.gregorian;
-                        const gDate = new Date(`${g.year}-${g.month.number}-${g.day}`);
-                        const now = new Date(); now.setHours(0,0,0,0);
-                        if (gDate >= now) {
-                            const daysLeft = Math.round((gDate - now) / 86400000);
-                            return { ...ev, daysLeft, gLabel: `${g.weekday.ar}، ${g.day} ${g.month.ar} ${g.year}`, hLabel: `${ev.day} ${data.data.hijri.month.ar} ${yearTry} هـ` };
+                        try {
+                            const res = await fetch(`https://api.aladhan.com/v1/hToG/${String(ev.day).padStart(2,'0')}-${String(ev.month).padStart(2,'0')}-${yearTry}`);
+                            if (!res.ok) continue;
+                            const data = await res.json();
+                            const g = data.data.gregorian;
+                            const gDate = new Date(`${g.year}-${g.month.number}-${g.day}`);
+                            const now = new Date(); now.setHours(0,0,0,0);
+                            if (gDate >= now) {
+                                const daysLeft = Math.round((gDate - now) / 86400000);
+                                found = { ...ev, daysLeft, gLabel: `${g.weekday.ar}، ${g.day} ${g.month.ar} ${g.year}`, hLabel: `${ev.day} ${data.data.hijri.month.ar} ${yearTry} هـ` };
+                                break;
+                            }
+                        } catch (innerErr) {
+                            // تجاهل فشل هذا الحدث بالذات وجرّب السنة التالية أو الحدث التالي
                         }
                     }
-                    return null;
-                }));
+                    results.push(found);
+                }
 
-                box.innerHTML = results.filter(Boolean).map(r => `
+                const validResults = results.filter(Boolean);
+                if (!validResults.length) {
+                    box.innerHTML = '⚠️ تعذّر تحميل الأحداث الإسلامية — تحقق من الاتصال بالإنترنت.';
+                    return;
+                }
+
+                box.innerHTML = validResults.map(r => `
                     <div class="event-card">
                         <div class="event-badge"><span class="num">${r.daysLeft}</span><span class="lbl">يوم</span></div>
                         <div class="event-info">
